@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { updateDriver } from "@/lib/actions/drivers";
 import type { ActionState } from "@/lib/actions/auth";
 import type { Profile } from "@/lib/types/database";
@@ -14,6 +14,7 @@ export default function EditDriverForm({ profile }: { profile: Profile }) {
   // produced by this render) — turn it off later via a timer effect.
   const [lastHandledState, setLastHandledState] = useState(state);
   const [saved, setSaved] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
   if (state !== lastHandledState) {
     setLastHandledState(state);
     if (!state.error) setSaved(true);
@@ -21,6 +22,7 @@ export default function EditDriverForm({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     if (!saved) return;
+    if (passwordRef.current) passwordRef.current.value = "";
     const t = setTimeout(() => setSaved(false), 2500);
     return () => clearTimeout(t);
   }, [saved]);
@@ -34,8 +36,8 @@ export default function EditDriverForm({ profile }: { profile: Profile }) {
           <Field label="Full Name">
             <input name="full_name" defaultValue={profile.full_name} required className="input" />
           </Field>
-          <Field label="Email" hint="Managed via login, not editable here">
-            <input value={profile.email ?? ""} disabled className="input opacity-60" />
+          <Field label="Email" hint="Used to sign in — changing this updates their login">
+            <input name="email" type="email" defaultValue={profile.email ?? ""} required className="input" />
           </Field>
           <Field label="Phone">
             <input name="phone" defaultValue={profile.phone ?? ""} type="tel" className="input" />
@@ -47,6 +49,19 @@ export default function EditDriverForm({ profile }: { profile: Profile }) {
             </select>
           </Field>
         </Grid>
+      </Section>
+
+      <Section title="Login">
+        <Field label="Reset Password" hint="Leave blank to keep their current password. Share the new one with them directly.">
+          <input
+            ref={passwordRef}
+            name="new_password"
+            type="text"
+            minLength={8}
+            placeholder="Leave blank to keep current password"
+            className="input"
+          />
+        </Field>
       </Section>
 
       <Section title="Assignment & Pay">

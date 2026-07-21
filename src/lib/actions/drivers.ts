@@ -62,11 +62,31 @@ export async function updateDriver(_prev: ActionState, formData: FormData): Prom
   const id = str(formData, "id");
   if (!id) return { error: "Missing driver id." };
 
+  const email = str(formData, "email");
+  const newPassword = str(formData, "new_password");
+  if (!email) return { error: "Email is required." };
+  if (newPassword && newPassword.length < 8) {
+    return { error: "New password must be at least 8 characters." };
+  }
+
+  // Email and password live on the auth user, not the profiles row — changing
+  // them requires the service-role admin client, not the RLS-scoped one.
+  const admin = createAdminClient();
+  const authUpdate: { email: string; email_confirm: true; password?: string } = {
+    email,
+    email_confirm: true,
+  };
+  if (newPassword) authUpdate.password = newPassword;
+
+  const { error: authError } = await admin.auth.admin.updateUserById(id, authUpdate);
+  if (authError) return { error: authError.message };
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: str(formData, "full_name"),
+      email,
       phone: str(formData, "phone") || null,
       truck_number: str(formData, "truck_number") || null,
       hourly_pay: numOrNull(formData, "hourly_pay"),
