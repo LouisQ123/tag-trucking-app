@@ -39,8 +39,8 @@ export default function EditDriverForm({ profile }: { profile: Profile }) {
           <Field label="Email" hint="Used to sign in — changing this updates their login">
             <input name="email" type="email" defaultValue={profile.email ?? ""} required className="input" />
           </Field>
-          <Field label="Phone">
-            <input name="phone" defaultValue={profile.phone ?? ""} type="tel" className="input" />
+          <Field label="Phone" hint="Drivers can sign in with this instead of email">
+            <input name="phone" defaultValue={profile.phone ?? ""} type="tel" placeholder="(555) 555-5555" className="input" />
           </Field>
           <Field label="Role">
             <select name="role" defaultValue={profile.role} className="input">

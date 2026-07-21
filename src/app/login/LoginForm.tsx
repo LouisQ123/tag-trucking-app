@@ -16,14 +16,15 @@ export default function LoginForm({ next }: { next: string }) {
       <input type="hidden" name="next" value={next} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-xs font-bold uppercase tracking-wide text-ink-2">
-          Email
+          Email or Phone Number
         </label>
         <input
           id="email"
           name="email"
-          type="email"
+          type="text"
           required
           autoComplete="username"
+          placeholder="you@company.com or (555) 555-5555"
           className="rounded-md border border-border bg-page px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent"
         />
       </div>

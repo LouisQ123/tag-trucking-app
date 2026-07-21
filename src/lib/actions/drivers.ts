@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toE164 } from "@/lib/phone";
 import type { ActionState } from "@/lib/actions/auth";
 
 function str(formData: FormData, key: string) {
@@ -28,15 +29,25 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
   const password = str(formData, "password");
   const fullName = str(formData, "full_name");
   const role = str(formData, "role") === "admin" ? "admin" : "driver";
+  const phoneRaw = str(formData, "phone");
 
   if (!email || !fullName) return { error: "Name and email are required." };
   if (password.length < 8) return { error: "Temporary password must be at least 8 characters." };
+
+  // Only drivers can sign in with their phone number — an admin's phone is
+  // just contact info, so it's never attached to their Auth identity.
+  let phoneE164: string | null = null;
+  if (role === "driver" && phoneRaw) {
+    phoneE164 = toE164(phoneRaw);
+    if (!phoneE164) return { error: "Phone number must be a valid 10-digit US number." };
+  }
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
+    ...(phoneE164 ? { phone: phoneE164, phone_confirm: true } : {}),
     user_metadata: {
       full_name: fullName,
       role,
@@ -45,7 +56,7 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
       cdl_number: str(formData, "cdl_number") || null,
       license_expiration: dateOrNull(formData, "license_expiration"),
       medical_card_expiration: dateOrNull(formData, "medical_card_expiration"),
-      phone: str(formData, "phone") || null,
+      phone: phoneRaw || null,
     },
   });
 
@@ -64,18 +75,37 @@ export async function updateDriver(_prev: ActionState, formData: FormData): Prom
 
   const email = str(formData, "email");
   const newPassword = str(formData, "new_password");
+  const role = str(formData, "role") === "admin" ? "admin" : "driver";
+  const phoneRaw = str(formData, "phone");
   if (!email) return { error: "Email is required." };
   if (newPassword && newPassword.length < 8) {
     return { error: "New password must be at least 8 characters." };
   }
 
+  // Only drivers can sign in with their phone number — clear it from Auth
+  // if this account isn't (or is no longer) a driver, set/update it if it is.
+  let phoneE164: string | null = null;
+  if (role === "driver" && phoneRaw) {
+    phoneE164 = toE164(phoneRaw);
+    if (!phoneE164) return { error: "Phone number must be a valid 10-digit US number." };
+  }
+
   // Email and password live on the auth user, not the profiles row — changing
   // them requires the service-role admin client, not the RLS-scoped one.
   const admin = createAdminClient();
-  const authUpdate: { email: string; email_confirm: true; password?: string } = {
+  const authUpdate: {
+    email: string;
+    email_confirm: true;
+    password?: string;
+    phone: string;
+    phone_confirm?: true;
+  } = {
     email,
     email_confirm: true,
+    // Empty string clears any previously-attached phone identifier.
+    phone: phoneE164 ?? "",
   };
+  if (phoneE164) authUpdate.phone_confirm = true;
   if (newPassword) authUpdate.password = newPassword;
 
   const { error: authError } = await admin.auth.admin.updateUserById(id, authUpdate);
@@ -87,13 +117,13 @@ export async function updateDriver(_prev: ActionState, formData: FormData): Prom
     .update({
       full_name: str(formData, "full_name"),
       email,
-      phone: str(formData, "phone") || null,
+      phone: phoneRaw || null,
       truck_number: str(formData, "truck_number") || null,
       hourly_pay: numOrNull(formData, "hourly_pay"),
       cdl_number: str(formData, "cdl_number") || null,
       license_expiration: dateOrNull(formData, "license_expiration"),
       medical_card_expiration: dateOrNull(formData, "medical_card_expiration"),
-      role: str(formData, "role") === "admin" ? "admin" : "driver",
+      role,
       active: formData.get("active") === "on",
     })
     .eq("id", id);
