@@ -104,6 +104,11 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="loads" value={JSON.stringify(loads)} />
+      <datalist id="dumping-locations">
+        {DUMPING_LOCATIONS.map((loc) => (
+          <option key={loc} value={loc} />
+        ))}
+      </datalist>
 
       {succeeded && (
         <div className="rounded-lg bg-good/10 border border-good/30 text-sm font-semibold px-4 py-3 flex items-center justify-between gap-3">
@@ -262,18 +267,13 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
                 value={row.jobSite}
                 onChange={(e) => updateLoad(row.key, "jobSite", e.target.value)}
               />
-              <select
+              <input
                 className="input-sm"
+                placeholder="Dumping location"
+                list="dumping-locations"
                 value={row.dumping}
                 onChange={(e) => updateLoad(row.key, "dumping", e.target.value)}
-              >
-                <option value="">Dumping location</option>
-                {DUMPING_LOCATIONS.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
+              />
               <input
                 className="input-sm"
                 placeholder="Material type"
