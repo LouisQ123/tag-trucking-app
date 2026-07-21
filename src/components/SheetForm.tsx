@@ -13,6 +13,7 @@ interface LoadRow {
 }
 
 const DUMPING_LOCATIONS = ["Glasgow", "Gill Quarry", "Highway Material", "KPK"];
+const MATERIAL_TYPES = ["Dirt", "Stone", "Modify", "Blacktop"];
 
 function todayISO() {
   const d = new Date();
@@ -107,6 +108,11 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
       <datalist id="dumping-locations">
         {DUMPING_LOCATIONS.map((loc) => (
           <option key={loc} value={loc} />
+        ))}
+      </datalist>
+      <datalist id="material-types">
+        {MATERIAL_TYPES.map((t) => (
+          <option key={t} value={t} />
         ))}
       </datalist>
 
@@ -277,6 +283,7 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
               <input
                 className="input-sm"
                 placeholder="Material type"
+                list="material-types"
                 value={row.type}
                 onChange={(e) => updateLoad(row.key, "type", e.target.value)}
               />
