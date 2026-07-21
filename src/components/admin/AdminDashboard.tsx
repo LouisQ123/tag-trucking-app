@@ -121,6 +121,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
 
   const byDriverLoads = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.loads?.length ?? 0);
   const byDriverMiles = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.total_miles ?? 0);
+  const byTruckMiles = aggregate(filtered, (s) => s.truck_number, (s) => s.total_miles ?? 0);
   const byCompanyLoads = aggregateLoads(filtered, (l) => l.company);
   const byDay = aggregateDay(filtered);
   const payroll = aggregatePayroll(filtered);
@@ -211,13 +212,16 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
             </ChartCard>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+            <ChartCard title="Miles by Truck" caption="Total miles driven, selected range">
+              <BarList data={byTruckMiles} color={SERIES.blue} unit="mi" />
+            </ChartCard>
             <ChartCard title="Loads by Company" caption="Which companies the fleet hauled for">
               <BarList data={byCompanyLoads} color={SERIES.orange} />
             </ChartCard>
-            <ChartCard title="Daily Load Volume" caption="Loads logged per day">
-              <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
-            </ChartCard>
           </div>
+          <ChartCard title="Daily Load Volume" caption="Loads logged per day">
+            <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
+          </ChartCard>
 
           <div className="bg-surface border border-border rounded-xl p-4.5">
             <p className="text-[13px] font-extrabold mb-0.5">Payroll</p>
