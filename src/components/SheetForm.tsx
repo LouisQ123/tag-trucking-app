@@ -12,6 +12,8 @@ interface LoadRow {
   company: string;
 }
 
+const DUMPING_LOCATIONS = ["Glasgow", "Gill Quarry", "Highway Material", "KPK"];
+
 function todayISO() {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -260,12 +262,18 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
                 value={row.jobSite}
                 onChange={(e) => updateLoad(row.key, "jobSite", e.target.value)}
               />
-              <input
+              <select
                 className="input-sm"
-                placeholder="Dumping location"
                 value={row.dumping}
                 onChange={(e) => updateLoad(row.key, "dumping", e.target.value)}
-              />
+              >
+                <option value="">Dumping location</option>
+                {DUMPING_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
               <input
                 className="input-sm"
                 placeholder="Material type"
