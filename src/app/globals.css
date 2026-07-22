@@ -103,10 +103,16 @@ textarea {
   /* Explicit height, not just padding — browsers (Safari especially) size
      date/time/select controls to their own internal content by default,
      so different field types can end up taller or shorter than plain text
-     inputs even with identical padding and font-size. */
+     inputs even with identical padding and font-size. box-sizing/overflow
+     are repeated explicitly (not just relying on the global reset) because
+     Safari has been observed giving a never-focused, empty time input a
+     taller intrinsic content box than the same field once it's been
+     touched — height alone didn't clip it, so we force the clip too. */
   input.input,
   select.input {
+    box-sizing: border-box;
     height: 2.5rem;
+    overflow: hidden;
   }
   /* Native <select> chrome renders at a different size than text inputs
      even with identical box-model CSS — strip it and draw our own arrow
@@ -130,7 +136,9 @@ textarea {
     font-size: 0.83rem;
   }
   input.input-sm {
+    box-sizing: border-box;
     height: 2.125rem;
+    overflow: hidden;
   }
   .input-sm:focus {
     outline: 2px solid var(--accent);
