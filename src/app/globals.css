@@ -144,12 +144,35 @@ textarea {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
-  /* We draw our own clock icon as a background image (never a separate
-     overlaid element — an overlay, even with pointer-events:none, risked
-     intercepting Safari's own click handling for the time segments beneath
-     it). Safari's native indicator can also render invisible against a dark
-     background, so it's hidden — opacity, not display, so it stays clickable
-     and behaves exactly as it did before. */
+  /* Root cause of the width bug reported on real iPhones, confirmed via
+     Safari's own inspector: Safari silently forces box-sizing:content-box
+     on native-themed type=date and type=time inputs, overriding our
+     border-box — the exact same class of bug the select.input fix above
+     addresses, just for a different pair of control types. appearance:none
+     is what stops Safari from re-imposing it; everything else here (icons,
+     height) only matters once that's actually taking effect. */
+  input[type="date"].input,
+  .time-input {
+    appearance: none;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+  }
+  /* We draw our own icons as background images (never a separate overlaid
+     element — an overlay, even with pointer-events:none, risked
+     intercepting Safari's own click handling for the segments beneath it).
+     Safari's native indicators can also render invisible against a dark
+     background, so those are hidden too — opacity, not display, so they
+     stay clickable and behave exactly as before. */
+  input[type="date"].input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238f8d86' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='4.5' width='13' height='12' rx='1.5'/%3E%3Cpath d='M3.5 8h13M7 3v3M13 3v3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    background-size: 15px;
+    padding-right: 2.25rem;
+  }
+  input[type="date"].input::-webkit-calendar-picker-indicator {
+    opacity: 0;
+  }
   .time-input {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238f8d86' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='10' cy='10' r='7.25'/%3E%3Cpath d='M10 6v4l2.5 2'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
