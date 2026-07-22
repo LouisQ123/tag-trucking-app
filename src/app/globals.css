@@ -100,6 +100,14 @@ textarea {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
+  /* Explicit height, not just padding — browsers (Safari especially) size
+     date/time/select controls to their own internal content by default,
+     so different field types can end up taller or shorter than plain text
+     inputs even with identical padding and font-size. */
+  input.input,
+  select.input {
+    height: 2.5rem;
+  }
   /* Native <select> chrome renders at a different size than text inputs
      even with identical box-model CSS — strip it and draw our own arrow
      so selects line up with the rest of the form. */
@@ -120,6 +128,9 @@ textarea {
     color: var(--ink);
     padding: 0.45rem 0.55rem;
     font-size: 0.83rem;
+  }
+  input.input-sm {
+    height: 2.125rem;
   }
   .input-sm:focus {
     outline: 2px solid var(--accent);
