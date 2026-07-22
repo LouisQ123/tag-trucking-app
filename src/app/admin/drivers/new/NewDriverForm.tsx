@@ -39,7 +39,7 @@ export default function NewDriverForm() {
           <Field label="Hourly Pay ($)">
             <input name="hourly_pay" type="number" min={0} step={0.25} className="input" />
           </Field>
-          <Field label="Phone" hint="Drivers can sign in with this instead of email">
+          <Field label="Phone" hint="Can sign in with this instead of email">
             <input name="phone" type="tel" placeholder="(555) 555-5555" className="input" />
           </Field>
         </Grid>

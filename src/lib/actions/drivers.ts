@@ -34,10 +34,8 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
   if (!email || !fullName) return { error: "Name and email are required." };
   if (password.length < 8) return { error: "Temporary password must be at least 8 characters." };
 
-  // Only drivers can sign in with their phone number — an admin's phone is
-  // just contact info, so it's never attached to their Auth identity.
   let phoneE164: string | null = null;
-  if (role === "driver" && phoneRaw) {
+  if (phoneRaw) {
     phoneE164 = toE164(phoneRaw);
     if (!phoneE164) return { error: "Phone number must be a valid 10-digit US number." };
   }
@@ -82,10 +80,8 @@ export async function updateDriver(_prev: ActionState, formData: FormData): Prom
     return { error: "New password must be at least 8 characters." };
   }
 
-  // Only drivers can sign in with their phone number — clear it from Auth
-  // if this account isn't (or is no longer) a driver, set/update it if it is.
   let phoneE164: string | null = null;
-  if (role === "driver" && phoneRaw) {
+  if (phoneRaw) {
     phoneE164 = toE164(phoneRaw);
     if (!phoneE164) return { error: "Phone number must be a valid 10-digit US number." };
   }
