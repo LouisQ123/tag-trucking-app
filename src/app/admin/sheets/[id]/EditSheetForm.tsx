@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { submitSheet } from "@/lib/actions/sheets";
+import Link from "next/link";
+import { updateSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES } from "@/lib/loadOptions";
+import type { ProductionSheet, Profile } from "@/lib/types/database";
 
 interface LoadRow {
   key: string;
@@ -13,63 +15,43 @@ interface LoadRow {
   company: string;
 }
 
-function todayISO() {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
 function newLoad(): LoadRow {
   return { key: Math.random().toString(36).slice(2), jobSite: "", dumping: "", type: "", company: "" };
 }
 
 const initialState: ActionState = {};
 
-export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
-  const [state, formAction, pending] = useActionState(submitSheet, initialState);
-  const [dismissed, setDismissed] = useState(false);
-  const [savedDate, setSavedDate] = useState("");
+export default function EditSheetForm({
+  sheet,
+  drivers,
+}: {
+  sheet: ProductionSheet;
+  drivers: Profile[];
+}) {
+  const [state, formAction, pending] = useActionState(updateSheet, initialState);
 
-  const [date, setDate] = useState(todayISO());
-  const [truck, setTruck] = useState(defaultTruck);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [hours, setHours] = useState("");
+  const [driverId, setDriverId] = useState(sheet.driver_id);
+  const [date, setDate] = useState(sheet.date);
+  const [truck, setTruck] = useState(sheet.truck_number ?? "");
+  const [startTime, setStartTime] = useState(sheet.start_time ?? "");
+  const [endTime, setEndTime] = useState(sheet.end_time ?? "");
+  const [hours, setHours] = useState(sheet.hours !== null ? String(sheet.hours) : "");
   const [hoursTouched, setHoursTouched] = useState(false);
-  const [fuel, setFuel] = useState("");
-  const [startMiles, setStartMiles] = useState("");
-  const [endMiles, setEndMiles] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [loads, setLoads] = useState<LoadRow[]>([newLoad(), newLoad()]);
-
-  function clearFields() {
-    setDate(todayISO());
-    setTruck(defaultTruck);
-    setStartTime("");
-    setEndTime("");
-    setHours("");
-    setHoursTouched(false);
-    setFuel("");
-    setStartMiles("");
-    setEndMiles("");
-    setRemarks("");
-    setLoads([newLoad(), newLoad()]);
-  }
-
-  // After a successful submit, clear the form for the next entry and
-  // surface a dismissible confirmation banner. Adjusted during render
-  // (React's recommended pattern) rather than in an effect, since this
-  // reacts to `state` — a value already produced by this render.
-  const [lastHandledState, setLastHandledState] = useState(state);
-  if (state !== lastHandledState) {
-    setLastHandledState(state);
-    if (!state.error) {
-      setSavedDate(date);
-      clearFields();
-      setDismissed(false);
-    }
-  }
+  const [fuel, setFuel] = useState(sheet.fuel_gallons !== null ? String(sheet.fuel_gallons) : "");
+  const [startMiles, setStartMiles] = useState(sheet.start_miles !== null ? String(sheet.start_miles) : "");
+  const [endMiles, setEndMiles] = useState(sheet.end_miles !== null ? String(sheet.end_miles) : "");
+  const [remarks, setRemarks] = useState(sheet.remarks ?? "");
+  const [loads, setLoads] = useState<LoadRow[]>(
+    sheet.loads?.length
+      ? sheet.loads.map((l) => ({
+          key: l.id,
+          jobSite: l.job_site ?? "",
+          dumping: l.dumping ?? "",
+          type: l.type ?? "",
+          company: l.company ?? "",
+        }))
+      : [newLoad()]
+  );
 
   function onStartEnd(nextStart: string, nextEnd: string) {
     if (!hoursTouched && nextStart && nextEnd) {
@@ -98,10 +80,9 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
     setLoads((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
   }
 
-  const succeeded = !pending && !state.error && state !== initialState && !dismissed;
-
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="id" value={sheet.id} />
       <input type="hidden" name="loads" value={JSON.stringify(loads)} />
       <datalist id="dumping-locations">
         {DUMPING_LOCATIONS.map((loc) => (
@@ -119,22 +100,29 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
         ))}
       </datalist>
 
-      {succeeded && (
-        <div className="rounded-lg bg-good/10 border border-good/30 text-sm font-semibold px-4 py-3 flex items-center justify-between gap-3">
-          <span>Sheet saved for {savedDate}.</span>
-          <button type="button" onClick={() => setDismissed(true)} className="text-xs underline font-bold">
-            Dismiss
-          </button>
-        </div>
-      )}
       {state.error && (
         <div className="rounded-lg bg-critical/10 border border-critical/30 text-sm font-semibold text-critical px-4 py-3">
           {state.error}
         </div>
       )}
 
-      <Card title="Shift">
+      <Card title="Sheet">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <Field label="Driver">
+            <select
+              name="driver_id"
+              value={driverId}
+              onChange={(e) => setDriverId(e.target.value)}
+              required
+              className="input"
+            >
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Date">
             <input
               type="date"
@@ -152,25 +140,14 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
               required
               value={truck}
               onChange={(e) => setTruck(e.target.value)}
-              placeholder="e.g. 14"
               className="input"
             />
           </Field>
-          <Field label="Total Hours" hint="Fills in from start/end time">
-            <input
-              type="number"
-              name="hours"
-              min={0}
-              step={0.25}
-              value={hours}
-              onChange={(e) => {
-                setHoursTouched(true);
-                setHours(e.target.value);
-              }}
-              placeholder="auto"
-              className="input"
-            />
-          </Field>
+        </div>
+      </Card>
+
+      <Card title="Shift">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           <Field label="Start Time">
             <input
               type="time"
@@ -192,6 +169,21 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
                 setEndTime(e.target.value);
                 onStartEnd(startTime, e.target.value);
               }}
+              className="input"
+            />
+          </Field>
+          <Field label="Total Hours" hint="Fills in from start/end time">
+            <input
+              type="number"
+              name="hours"
+              min={0}
+              step={0.25}
+              value={hours}
+              onChange={(e) => {
+                setHoursTouched(true);
+                setHours(e.target.value);
+              }}
+              placeholder="auto"
               className="input"
             />
           </Field>
@@ -329,22 +321,18 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
       </Card>
 
       <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            clearFields();
-            setDismissed(true);
-          }}
-          className="rounded-lg border border-border text-ink-2 font-bold text-sm px-5 py-2.5"
+        <Link
+          href="/admin"
+          className="rounded-lg border border-border text-ink-2 font-bold text-sm px-5 py-2.5 flex items-center"
         >
-          Clear
-        </button>
+          Cancel
+        </Link>
         <button
           type="submit"
           disabled={pending}
           className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
         >
-          {pending ? "Saving…" : "Submit Sheet"}
+          {pending ? "Saving…" : "Save Changes"}
         </button>
       </div>
     </form>

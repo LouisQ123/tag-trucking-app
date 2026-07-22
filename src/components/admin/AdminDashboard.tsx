@@ -293,14 +293,23 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                         <td className="py-2 pr-3">{s.hours ?? "—"}</td>
                         <td className="py-2 pr-3">{s.labor_cost !== null ? currency(s.labor_cost) : "—"}</td>
                         <td className="py-2">
-                          <button
-                            onClick={() => handleDelete(s.id)}
-                            disabled={deletingId === s.id}
-                            className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-xs disabled:opacity-50"
-                            aria-label="Move sheet to trash"
-                          >
-                            ×
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/admin/sheets/${s.id}`}
+                              className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-ink hover:border-ink-2 text-xs flex items-center justify-center"
+                              aria-label="Edit sheet"
+                            >
+                              ✎
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(s.id)}
+                              disabled={deletingId === s.id}
+                              className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-xs disabled:opacity-50"
+                              aria-label="Move sheet to trash"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
