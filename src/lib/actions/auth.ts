@@ -17,10 +17,9 @@ export async function signIn(_prev: ActionState, formData: FormData): Promise<Ac
     return { error: "Enter your email or phone number, and password." };
   }
 
-  // Drivers can sign in with their phone number instead of email (admins
-  // always use email — only driver accounts have a phone attached in Auth).
+  // Sign in with either an email or a phone number.
   const supabase = await createClient();
-  let signInError: { message: string } | null;
+  let signInError: { message: string; code?: string } | null;
   if (identifier.includes("@")) {
     ({ error: signInError } = await supabase.auth.signInWithPassword({ email: identifier, password }));
   } else {
@@ -30,6 +29,13 @@ export async function signIn(_prev: ActionState, formData: FormData): Promise<Ac
   }
 
   if (signInError) {
+    if (signInError.code === "phone_provider_disabled") {
+      return {
+        error:
+          "Phone sign-in isn't turned on for this project yet. In Supabase, go to Authentication → Sign In / Providers → Phone and enable it.",
+      };
+    }
+    console.error("signIn failed:", signInError.code, signInError.message);
     return { error: "Incorrect email/phone or password." };
   }
 
