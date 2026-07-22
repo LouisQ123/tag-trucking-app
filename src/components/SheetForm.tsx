@@ -140,7 +140,7 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
       )}
 
       <Card title="Shift">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
           <Field label="Date">
             <input
               type="date"
@@ -203,7 +203,7 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
       </Card>
 
       <Card title="Fuel & Mileage">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
           <Field label="Fuel (gallons)">
             <input
               type="number"
@@ -376,7 +376,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 min-w-0">
+    <div className="flex flex-col gap-1.5 min-w-0 w-full">
       <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">{label}</label>
       {children}
       {hint && <span className="text-[11px] text-muted">{hint}</span>}
