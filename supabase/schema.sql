@@ -80,8 +80,15 @@ create table if not exists public.loads (
   job_site text,
   dumping text,
   type text,
-  company text
+  company text,
+  arrival_time time,
+  departure_time time
 );
+
+-- Safe to re-run on a database that already has this table from before
+-- these two columns existed.
+alter table public.loads add column if not exists arrival_time time;
+alter table public.loads add column if not exists departure_time time;
 
 create index if not exists loads_sheet_idx on public.loads (sheet_id);
 

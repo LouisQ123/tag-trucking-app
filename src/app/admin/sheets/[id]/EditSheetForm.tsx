@@ -14,10 +14,20 @@ interface LoadRow {
   dumping: string;
   type: string;
   company: string;
+  arrivalTime: string;
+  departureTime: string;
 }
 
 function newLoad(): LoadRow {
-  return { key: Math.random().toString(36).slice(2), jobSite: "", dumping: "", type: "", company: "" };
+  return {
+    key: Math.random().toString(36).slice(2),
+    jobSite: "",
+    dumping: "",
+    type: "",
+    company: "",
+    arrivalTime: "",
+    departureTime: "",
+  };
 }
 
 const initialState: ActionState = {};
@@ -50,6 +60,8 @@ export default function EditSheetForm({
           dumping: l.dumping ?? "",
           type: l.type ?? "",
           company: l.company ?? "",
+          arrivalTime: l.arrival_time ?? "",
+          departureTime: l.departure_time ?? "",
         }))
       : [newLoad()]
   );
@@ -245,55 +257,71 @@ export default function EditSheetForm({
           </>
         }
       >
-        <div className="hidden sm:grid grid-cols-[20px_1fr_1fr_1fr_1fr_28px] gap-2.5 text-[10px] font-bold uppercase tracking-wide text-muted mb-1.5">
-          <span />
-          <span>Job Site / Plant</span>
-          <span>Dumping</span>
-          <span>Type</span>
-          <span>Company</span>
-          <span />
-        </div>
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           {loads.map((row, i) => (
-            <div key={row.key} className="grid grid-cols-1 sm:grid-cols-[20px_1fr_1fr_1fr_1fr_28px] gap-2.5 items-center">
-              <span className="hidden sm:block text-[12px] font-extrabold text-muted text-center tabular-nums">
-                {i + 1}
-              </span>
-              <input
-                className="input-sm"
-                placeholder="Job site / plant"
-                value={row.jobSite}
-                onChange={(e) => updateLoad(row.key, "jobSite", e.target.value)}
-              />
-              <input
-                className="input-sm"
-                placeholder="Dumping location"
-                list="dumping-locations"
-                value={row.dumping}
-                onChange={(e) => updateLoad(row.key, "dumping", e.target.value)}
-              />
-              <input
-                className="input-sm"
-                placeholder="Material type"
-                list="material-types"
-                value={row.type}
-                onChange={(e) => updateLoad(row.key, "type", e.target.value)}
-              />
-              <input
-                className="input-sm"
-                placeholder="Company"
-                list="companies"
-                value={row.company}
-                onChange={(e) => updateLoad(row.key, "company", e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => loads.length > 1 && setLoads((r) => r.filter((x) => x.key !== row.key))}
-                className="w-7 h-8 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-sm justify-self-start sm:justify-self-auto"
-                aria-label="Remove load"
-              >
-                ×
-              </button>
+            <div key={row.key} className="rounded-lg border border-border p-3 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-muted tabular-nums">Load {i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => loads.length > 1 && setLoads((r) => r.filter((x) => x.key !== row.key))}
+                  className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-sm"
+                  aria-label="Remove load"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex flex-col sm:grid sm:grid-cols-4 gap-2.5">
+                <input
+                  className="input-sm"
+                  placeholder="Job site / plant"
+                  value={row.jobSite}
+                  onChange={(e) => updateLoad(row.key, "jobSite", e.target.value)}
+                />
+                <input
+                  className="input-sm"
+                  placeholder="Dumping location"
+                  list="dumping-locations"
+                  value={row.dumping}
+                  onChange={(e) => updateLoad(row.key, "dumping", e.target.value)}
+                />
+                <input
+                  className="input-sm"
+                  placeholder="Material type"
+                  list="material-types"
+                  value={row.type}
+                  onChange={(e) => updateLoad(row.key, "type", e.target.value)}
+                />
+                <input
+                  className="input-sm"
+                  placeholder="Company"
+                  list="companies"
+                  value={row.company}
+                  onChange={(e) => updateLoad(row.key, "company", e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Job Site Arrival
+                  </span>
+                  <TimeInput
+                    name={`load-${row.key}-arrival`}
+                    defaultValue={row.arrivalTime}
+                    onChange={(v) => updateLoad(row.key, "arrivalTime", v)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Job Site Departure
+                  </span>
+                  <TimeInput
+                    name={`load-${row.key}-departure`}
+                    defaultValue={row.departureTime}
+                    onChange={(v) => updateLoad(row.key, "departureTime", v)}
+                  />
+                </div>
+              </div>
             </div>
           ))}
         </div>
