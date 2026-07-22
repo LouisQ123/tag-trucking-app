@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { submitSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES } from "@/lib/loadOptions";
+import TimeInput from "@/components/TimeInput";
 
 interface LoadRow {
   key: string;
@@ -172,27 +173,23 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
             />
           </Field>
           <Field label="Start Time">
-            <input
-              type="time"
+            <TimeInput
               name="start_time"
               value={startTime}
-              onChange={(e) => {
-                setStartTime(e.target.value);
-                onStartEnd(e.target.value, endTime);
+              onChange={(v) => {
+                setStartTime(v);
+                onStartEnd(v, endTime);
               }}
-              className="input"
             />
           </Field>
           <Field label="End Time">
-            <input
-              type="time"
+            <TimeInput
               name="end_time"
               value={endTime}
-              onChange={(e) => {
-                setEndTime(e.target.value);
-                onStartEnd(startTime, e.target.value);
+              onChange={(v) => {
+                setEndTime(v);
+                onStartEnd(startTime, v);
               }}
-              className="input"
             />
           </Field>
         </div>

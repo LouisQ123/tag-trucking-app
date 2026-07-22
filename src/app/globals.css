@@ -125,6 +125,12 @@ textarea {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
+  /* We draw our own clock icon (TimeInput component) since Safari's native
+     time-picker indicator can render invisible against a dark background —
+     the native one stays clickable, just hidden, so behavior is unchanged. */
+  .time-input::-webkit-calendar-picker-indicator {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

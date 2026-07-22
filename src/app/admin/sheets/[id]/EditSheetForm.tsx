@@ -5,6 +5,7 @@ import Link from "next/link";
 import { updateSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES } from "@/lib/loadOptions";
+import TimeInput from "@/components/TimeInput";
 import type { ProductionSheet, Profile } from "@/lib/types/database";
 
 interface LoadRow {
@@ -149,27 +150,23 @@ export default function EditSheetForm({
       <Card title="Shift">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           <Field label="Start Time">
-            <input
-              type="time"
+            <TimeInput
               name="start_time"
               value={startTime}
-              onChange={(e) => {
-                setStartTime(e.target.value);
-                onStartEnd(e.target.value, endTime);
+              onChange={(v) => {
+                setStartTime(v);
+                onStartEnd(v, endTime);
               }}
-              className="input"
             />
           </Field>
           <Field label="End Time">
-            <input
-              type="time"
+            <TimeInput
               name="end_time"
               value={endTime}
-              onChange={(e) => {
-                setEndTime(e.target.value);
-                onStartEnd(startTime, e.target.value);
+              onChange={(v) => {
+                setEndTime(v);
+                onStartEnd(startTime, v);
               }}
-              className="input"
             />
           </Field>
           <Field label="Total Hours" hint="Fills in from start/end time">
