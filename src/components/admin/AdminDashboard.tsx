@@ -10,7 +10,14 @@ import { softDeleteSheet, exportAllData } from "@/lib/actions/admin";
 
 const SERIES = { blue: "var(--series-blue)", green: "var(--series-green)", orange: "var(--accent)" };
 
-type RangeKey = "today" | "7" | "30" | "all";
+type RangeKey = "today" | "7" | "30" | "all" | "custom";
+
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -30,8 +37,14 @@ function fmtShortDate(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-function inRange(dateISO: string, range: RangeKey) {
+function inRange(dateISO: string, range: RangeKey, customFrom: string, customTo: string) {
   if (range === "all") return true;
+  if (range === "custom") {
+    if (!customFrom || !customTo) return true;
+    // Normalize so it doesn't matter which date was picked first.
+    const [lo, hi] = customFrom <= customTo ? [customFrom, customTo] : [customTo, customFrom];
+    return dateISO >= lo && dateISO <= hi;
+  }
   const days = range === "today" ? 0 : Number(range);
   const d = new Date(dateISO + "T00:00:00");
   const now = new Date();
@@ -49,6 +62,8 @@ function currency(n: number) {
 export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }) {
   const router = useRouter();
   const [range, setRange] = useState<RangeKey>("30");
+  const [customFrom, setCustomFrom] = useState(todayISO());
+  const [customTo, setCustomTo] = useState(todayISO());
   const [driverFilter, setDriverFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -61,7 +76,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
 
   const filtered = useMemo(() => {
     return sheets.filter((s) => {
-      if (!inRange(s.date, range)) return false;
+      if (!inRange(s.date, range, customFrom, customTo)) return false;
       if (driverFilter !== "all" && s.profiles?.full_name !== driverFilter) return false;
       if (companyFilter !== "all") {
         const hasCo = (s.loads ?? []).some((l) => l.company === companyFilter);
@@ -69,7 +84,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
       }
       return true;
     });
-  }, [sheets, range, driverFilter, companyFilter]);
+  }, [sheets, range, customFrom, customTo, driverFilter, companyFilter]);
 
   const [exporting, setExporting] = useState(false);
 
@@ -135,7 +150,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
 
       <div className="flex flex-wrap items-center gap-2.5 bg-surface border border-border rounded-xl px-3.5 py-3">
         <div className="flex items-center gap-0.5 bg-surface-2 rounded-lg p-1">
-          {(["today", "7", "30", "all"] as RangeKey[]).map((r) => (
+          {(["today", "7", "30", "all", "custom"] as RangeKey[]).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
@@ -143,10 +158,29 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                 range === r ? "bg-accent text-accent-ink" : "text-ink-2"
               }`}
             >
-              {r === "today" ? "Today" : r === "all" ? "All" : `${r}D`}
+              {r === "today" ? "Today" : r === "all" ? "All" : r === "custom" ? "Custom" : `${r}D`}
             </button>
           ))}
         </div>
+        {range === "custom" && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5"
+              aria-label="From date"
+            />
+            <span className="text-xs text-muted font-bold">to</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5"
+              aria-label="To date"
+            />
+          </div>
+        )}
         <select
           value={driverFilter}
           onChange={(e) => setDriverFilter(e.target.value)}
