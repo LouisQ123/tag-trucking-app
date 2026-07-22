@@ -7,3 +7,9 @@ export function toE164(raw: string): string | null {
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   return null;
 }
+
+// The last 10 digits of a phone number, for loosely matching two numbers
+// regardless of formatting ("(555) 555-5555" vs "+15555555555" vs "5555555555").
+export function last10Digits(raw: string): string {
+  return raw.replace(/\D/g, "").slice(-10);
+}

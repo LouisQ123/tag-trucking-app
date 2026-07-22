@@ -34,10 +34,11 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
   if (!email || !fullName) return { error: "Name and email are required." };
   if (password.length < 8) return { error: "Temporary password must be at least 8 characters." };
 
-  let phoneE164: string | null = null;
-  if (phoneRaw) {
-    phoneE164 = toE164(phoneRaw);
-    if (!phoneE164) return { error: "Phone number must be a valid 10-digit US number." };
+  // Phone sign-in is handled at the app level (phone -> email lookup), not
+  // via Supabase's native phone auth — that requires a paid SMS provider we
+  // don't need since we never send an OTP. Just validate the format here.
+  if (phoneRaw && !toE164(phoneRaw)) {
+    return { error: "Phone number must be a valid 10-digit US number." };
   }
 
   const admin = createAdminClient();
@@ -45,7 +46,6 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
     email,
     password,
     email_confirm: true,
-    ...(phoneE164 ? { phone: phoneE164, phone_confirm: true } : {}),
     user_metadata: {
       full_name: fullName,
       role,
@@ -80,28 +80,20 @@ export async function updateDriver(_prev: ActionState, formData: FormData): Prom
     return { error: "New password must be at least 8 characters." };
   }
 
-  let phoneE164: string | null = null;
-  if (phoneRaw) {
-    phoneE164 = toE164(phoneRaw);
-    if (!phoneE164) return { error: "Phone number must be a valid 10-digit US number." };
+  // Phone sign-in is handled at the app level (phone -> email lookup), not
+  // via Supabase's native phone auth — that requires a paid SMS provider we
+  // don't need since we never send an OTP. Just validate the format here.
+  if (phoneRaw && !toE164(phoneRaw)) {
+    return { error: "Phone number must be a valid 10-digit US number." };
   }
 
   // Email and password live on the auth user, not the profiles row — changing
   // them requires the service-role admin client, not the RLS-scoped one.
   const admin = createAdminClient();
-  const authUpdate: {
-    email: string;
-    email_confirm: true;
-    password?: string;
-    phone: string;
-    phone_confirm?: true;
-  } = {
+  const authUpdate: { email: string; email_confirm: true; password?: string } = {
     email,
     email_confirm: true,
-    // Empty string clears any previously-attached phone identifier.
-    phone: phoneE164 ?? "",
   };
-  if (phoneE164) authUpdate.phone_confirm = true;
   if (newPassword) authUpdate.password = newPassword;
 
   const { error: authError } = await admin.auth.admin.updateUserById(id, authUpdate);

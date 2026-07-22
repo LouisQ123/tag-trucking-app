@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { toE164 } from "@/lib/phone";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { last10Digits } from "@/lib/phone";
 
 export interface ActionState {
   error?: string;
@@ -17,25 +18,28 @@ export async function signIn(_prev: ActionState, formData: FormData): Promise<Ac
     return { error: "Enter your email or phone number, and password." };
   }
 
-  // Sign in with either an email or a phone number.
-  const supabase = await createClient();
-  let signInError: { message: string; code?: string } | null;
-  if (identifier.includes("@")) {
-    ({ error: signInError } = await supabase.auth.signInWithPassword({ email: identifier, password }));
-  } else {
-    const phone = toE164(identifier);
-    if (!phone) return { error: "Incorrect email/phone or password." };
-    ({ error: signInError } = await supabase.auth.signInWithPassword({ phone, password }));
+  // A phone number is just an alternate way to find the account's email —
+  // we never use Supabase's native phone auth (that needs a paid SMS
+  // provider we don't need, since we're not sending any OTP).
+  let email = identifier;
+  if (!identifier.includes("@")) {
+    const inputDigits = last10Digits(identifier);
+    if (inputDigits.length !== 10) return { error: "Incorrect email/phone or password." };
+
+    const admin = createAdminClient();
+    const { data: profiles } = await admin
+      .from("profiles")
+      .select("email, phone")
+      .not("phone", "is", null);
+    const match = profiles?.find((p) => p.phone && last10Digits(p.phone) === inputDigits);
+    if (!match?.email) return { error: "Incorrect email/phone or password." };
+    email = match.email;
   }
 
+  const supabase = await createClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
   if (signInError) {
-    if (signInError.code === "phone_provider_disabled") {
-      return {
-        error:
-          "Phone sign-in isn't turned on for this project yet. In Supabase, go to Authentication → Sign In / Providers → Phone and enable it.",
-      };
-    }
-    console.error("signIn failed:", signInError.code, signInError.message);
     return { error: "Incorrect email/phone or password." };
   }
 
