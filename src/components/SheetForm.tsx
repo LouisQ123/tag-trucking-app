@@ -43,6 +43,10 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
   const [endMiles, setEndMiles] = useState("");
   const [remarks, setRemarks] = useState("");
   const [loads, setLoads] = useState<LoadRow[]>([newLoad(), newLoad()]);
+  // Start/End Time are uncontrolled (see TimeInput) so normal typing never
+  // remounts them. Bumping this key is the only way we force them back to
+  // blank — on "Clear" and after a successful submit.
+  const [timeResetKey, setTimeResetKey] = useState(0);
 
   function clearFields() {
     setDate(todayISO());
@@ -56,6 +60,7 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
     setEndMiles("");
     setRemarks("");
     setLoads([newLoad(), newLoad()]);
+    setTimeResetKey((k) => k + 1);
   }
 
   // After a successful submit, clear the form for the next entry and
@@ -174,8 +179,9 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
           </Field>
           <Field label="Start Time">
             <TimeInput
+              key={`start-${timeResetKey}`}
               name="start_time"
-              value={startTime}
+              defaultValue={startTime}
               onChange={(v) => {
                 setStartTime(v);
                 onStartEnd(v, endTime);
@@ -184,8 +190,9 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
           </Field>
           <Field label="End Time">
             <TimeInput
+              key={`end-${timeResetKey}`}
               name="end_time"
-              value={endTime}
+              defaultValue={endTime}
               onChange={(v) => {
                 setEndTime(v);
                 onStartEnd(startTime, v);

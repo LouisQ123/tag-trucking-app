@@ -152,7 +152,7 @@ export default function EditSheetForm({
           <Field label="Start Time">
             <TimeInput
               name="start_time"
-              value={startTime}
+              defaultValue={startTime}
               onChange={(v) => {
                 setStartTime(v);
                 onStartEnd(v, endTime);
@@ -162,7 +162,7 @@ export default function EditSheetForm({
           <Field label="End Time">
             <TimeInput
               name="end_time"
-              value={endTime}
+              defaultValue={endTime}
               onChange={(v) => {
                 setEndTime(v);
                 onStartEnd(startTime, v);
