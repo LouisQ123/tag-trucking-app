@@ -86,6 +86,26 @@ function clearDraft(driverId: string) {
   }
 }
 
+// A draft with nothing but default values (today's date, the driver's
+// default truck, no times, no loads filled in) isn't real progress —
+// don't persist it, and don't show the "restored" banner for it if an old
+// one is still sitting in storage.
+function isBlankDraft(draft: Draft, defaultTruck: string): boolean {
+  const rowBlank = (l: LoadRow) =>
+    !l.jobSite && !l.dumping && !l.type && !l.company && !l.jobSiteArrivalTime && !l.jobSiteDepartureTime && !l.note;
+  return (
+    (draft.truck || "") === defaultTruck &&
+    !draft.startTime &&
+    !draft.endTime &&
+    !draft.hours &&
+    !draft.fuel &&
+    !draft.startMiles &&
+    !draft.endMiles &&
+    !draft.remarks &&
+    draft.loads.every(rowBlank)
+  );
+}
+
 const initialState: ActionState = {};
 
 export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: string; driverId: string }) {
@@ -141,7 +161,7 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
   // render/SSR, so it can only be read here.
   useEffect(() => {
     const draft = loadDraft(driverId);
-    if (draft) {
+    if (draft && !isBlankDraft(draft, defaultTruck)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDate(draft.date || todayISO());
       setTruck(draft.truck || defaultTruck);
@@ -156,15 +176,21 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
       setLoads(draft.loads?.length ? draft.loads : [newLoad(), newLoad()]);
       setTimeResetKey((k) => k + 1);
       setDraftRestored(true);
+    } else if (draft) {
+      // Stale empty draft from before this fix — clear it so it doesn't
+      // keep tripping the restored banner on future visits.
+      clearDraft(driverId);
     }
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Autosave the in-progress sheet to this device on every change.
+  // Autosave the in-progress sheet to this device on every change. A draft
+  // that's still just the defaults isn't worth persisting — it would only
+  // trip the "restored" banner on the next visit for no reason.
   useEffect(() => {
     if (!hydrated) return;
-    saveDraft(driverId, {
+    const draft: Draft = {
       date,
       truck,
       startTime,
@@ -176,10 +202,16 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
       endMiles,
       remarks,
       loads,
-    });
+    };
+    if (isBlankDraft(draft, defaultTruck)) {
+      clearDraft(driverId);
+    } else {
+      saveDraft(driverId, draft);
+    }
   }, [
     hydrated,
     driverId,
+    defaultTruck,
     date,
     truck,
     startTime,
