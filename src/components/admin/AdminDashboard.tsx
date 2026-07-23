@@ -150,24 +150,24 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const avgMpg = totalFuel > 0 ? totalMiles / totalFuel : null;
   const activeDrivers = new Set(filtered.map((s) => s.profiles?.full_name).filter(Boolean)).size;
 
-  let totalDumpingMin = 0,
-    dumpingLoadsTimed = 0;
+  let totalJobSiteMin = 0,
+    jobSiteLoadsTimed = 0;
   for (const s of filtered) {
     for (const l of s.loads ?? []) {
       const mins = minutesBetween(l.job_site_arrival_time, l.job_site_departure_time);
       if (mins !== null) {
-        totalDumpingMin += mins;
-        dumpingLoadsTimed += 1;
+        totalJobSiteMin += mins;
+        jobSiteLoadsTimed += 1;
       }
     }
   }
-  const avgDumpingMin = dumpingLoadsTimed > 0 ? totalDumpingMin / dumpingLoadsTimed : null;
+  const avgJobSiteMin = jobSiteLoadsTimed > 0 ? totalJobSiteMin / jobSiteLoadsTimed : null;
 
   const byDriverLoads = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.loads?.length ?? 0);
   const byDriverMiles = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.total_miles ?? 0);
   const byTruckMiles = aggregate(filtered, (s) => s.truck_number, (s) => s.total_miles ?? 0);
   const byCompanyLoads = aggregateLoads(filtered, (l) => l.company);
-  const byDumpingTime = aggregateDumpingTime(filtered);
+  const byJobSiteTime = aggregateJobSiteTime(filtered);
   const byDay = aggregateDay(filtered);
   const payroll = aggregatePayroll(filtered);
 
@@ -264,9 +264,9 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
             <Kpi label="Total Hours" value={round1(totalHours).toLocaleString()} unit="hrs" />
             <Kpi label="Avg Fuel Efficiency" value={avgMpg !== null ? String(round1(avgMpg)) : "—"} unit={avgMpg !== null ? "mpg" : ""} />
             <Kpi
-              label="Avg Time at Dumping"
-              value={avgDumpingMin !== null ? fmtMinutes(avgDumpingMin) : "—"}
-              sub={dumpingLoadsTimed > 0 ? `${dumpingLoadsTimed} loads timed` : undefined}
+              label="Avg Time at Job Site"
+              value={avgJobSiteMin !== null ? fmtMinutes(avgJobSiteMin) : "—"}
+              sub={jobSiteLoadsTimed > 0 ? `${jobSiteLoadsTimed} loads timed` : undefined}
             />
             <Kpi label="Active Drivers" value={activeDrivers.toLocaleString()} />
             <Kpi label="Labor Cost" value={currency(totalLaborCost)} accent />
@@ -289,8 +289,8 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
             </ChartCard>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-            <ChartCard title="Time at Dumping by Location" caption="Average minutes from arrival to departure">
-              <BarList data={byDumpingTime} color={SERIES.green} unit="min" />
+            <ChartCard title="Time at Job Site / Plant" caption="Average minutes from arrival to departure">
+              <BarList data={byJobSiteTime} color={SERIES.green} unit="min" />
             </ChartCard>
             <ChartCard title="Daily Load Volume" caption="Loads logged per day">
               <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
@@ -460,16 +460,16 @@ function aggregateDay(sheets: ProductionSheet[]) {
     .map((d) => ({ label: fmtDate(d), shortLabel: fmtShortDate(d), value: map.get(d)! }));
 }
 
-function aggregateDumpingTime(sheets: ProductionSheet[]) {
+function aggregateJobSiteTime(sheets: ProductionSheet[]) {
   const map = new Map<string, { totalMin: number; count: number }>();
   for (const s of sheets) {
     for (const l of s.loads ?? []) {
       const mins = minutesBetween(l.job_site_arrival_time, l.job_site_departure_time);
-      if (mins === null || !l.dumping) continue;
-      const entry = map.get(l.dumping) ?? { totalMin: 0, count: 0 };
+      if (mins === null || !l.job_site) continue;
+      const entry = map.get(l.job_site) ?? { totalMin: 0, count: 0 };
       entry.totalMin += mins;
       entry.count += 1;
-      map.set(l.dumping, entry);
+      map.set(l.job_site, entry);
     }
   }
   return Array.from(map, ([label, v]) => ({ label, value: Math.round(v.totalMin / v.count) }))
