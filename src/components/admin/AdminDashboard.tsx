@@ -321,6 +321,62 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
           </div>
 
           <div className="bg-surface border border-border rounded-xl p-4.5">
+            <p className="text-[13px] font-extrabold mb-0.5">Daily Load Summary</p>
+            <p className="text-[11.5px] text-muted mb-3.5">
+              Every load logged, grouped by day, most recent first
+            </p>
+            <div className="flex flex-col gap-5">
+              {dailyLoads.map(({ date, loads, totalSiteHours }) => (
+                <div key={date}>
+                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-2">
+                    {fmtDate(date)}{" "}
+                    <span className="text-ink-2 normal-case font-semibold">
+                      · {loads.length} load{loads.length === 1 ? "" : "s"}
+                      {totalSiteHours > 0 ? ` · ${totalSiteHours} hrs at job site total` : ""}
+                    </span>
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[960px]">
+                      <thead>
+                        <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
+                          <th className="py-2 pr-3">Driver</th>
+                          <th className="py-2 pr-3">Truck</th>
+                          <th className="py-2 pr-3">Job Site</th>
+                          <th className="py-2 pr-3">Dumping</th>
+                          <th className="py-2 pr-3">Material</th>
+                          <th className="py-2 pr-3">Company</th>
+                          <th className="py-2 pr-3">Arrival</th>
+                          <th className="py-2 pr-3">Departure</th>
+                          <th className="py-2 pr-3">Time at Site</th>
+                          <th className="py-2">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loads.map((l) => (
+                          <tr key={l.id} className="border-t border-grid">
+                            <td className="py-2 pr-3 font-semibold tabular-nums">{l.driver}</td>
+                            <td className="py-2 pr-3 tabular-nums">{l.truck}</td>
+                            <td className="py-2 pr-3">{l.jobSite || "—"}</td>
+                            <td className="py-2 pr-3">{l.dumping || "—"}</td>
+                            <td className="py-2 pr-3">{l.type || "—"}</td>
+                            <td className="py-2 pr-3">{l.company || "—"}</td>
+                            <td className="py-2 pr-3 tabular-nums">{fmtTime(l.arrival)}</td>
+                            <td className="py-2 pr-3 tabular-nums">{fmtTime(l.departure)}</td>
+                            <td className="py-2 pr-3 tabular-nums">
+                              {l.siteMin !== null ? `${round1(l.siteMin / 60)} hrs` : "—"}
+                            </td>
+                            <td className="py-2 text-ink-2">{l.note || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-surface border border-border rounded-xl p-4.5">
             <p className="text-[13px] font-extrabold mb-0.5">Production Log</p>
             <p className="text-[11.5px] text-muted mb-3.5">
               {filtered.length} sheet{filtered.length === 1 ? "" : "s"} in view, most recent first
@@ -377,57 +433,6 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                     ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          <div className="bg-surface border border-border rounded-xl p-4.5">
-            <p className="text-[13px] font-extrabold mb-0.5">Daily Load Summary</p>
-            <p className="text-[11.5px] text-muted mb-3.5">
-              Every load logged, grouped by day, most recent first
-            </p>
-            <div className="flex flex-col gap-5">
-              {dailyLoads.map(({ date, loads }) => (
-                <div key={date}>
-                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-2">
-                    {fmtDate(date)}{" "}
-                    <span className="text-ink-2 normal-case font-semibold">
-                      · {loads.length} load{loads.length === 1 ? "" : "s"}
-                    </span>
-                  </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[860px]">
-                      <thead>
-                        <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
-                          <th className="py-2 pr-3">Driver</th>
-                          <th className="py-2 pr-3">Truck</th>
-                          <th className="py-2 pr-3">Job Site</th>
-                          <th className="py-2 pr-3">Dumping</th>
-                          <th className="py-2 pr-3">Material</th>
-                          <th className="py-2 pr-3">Company</th>
-                          <th className="py-2 pr-3">Arrival</th>
-                          <th className="py-2 pr-3">Departure</th>
-                          <th className="py-2">Note</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loads.map((l) => (
-                          <tr key={l.id} className="border-t border-grid">
-                            <td className="py-2 pr-3 font-semibold tabular-nums">{l.driver}</td>
-                            <td className="py-2 pr-3 tabular-nums">{l.truck}</td>
-                            <td className="py-2 pr-3">{l.jobSite || "—"}</td>
-                            <td className="py-2 pr-3">{l.dumping || "—"}</td>
-                            <td className="py-2 pr-3">{l.type || "—"}</td>
-                            <td className="py-2 pr-3">{l.company || "—"}</td>
-                            <td className="py-2 pr-3 tabular-nums">{fmtTime(l.arrival)}</td>
-                            <td className="py-2 pr-3 tabular-nums">{fmtTime(l.departure)}</td>
-                            <td className="py-2 text-ink-2">{l.note || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </>
@@ -519,6 +524,7 @@ function groupLoadsByDate(sheets: ProductionSheet[]) {
       company: string | null;
       arrival: string | null;
       departure: string | null;
+      siteMin: number | null;
       note: string | null;
     }>
   >();
@@ -535,6 +541,7 @@ function groupLoadsByDate(sheets: ProductionSheet[]) {
         company: l.company,
         arrival: l.job_site_arrival_time,
         departure: l.job_site_departure_time,
+        siteMin: minutesBetween(l.job_site_arrival_time, l.job_site_departure_time),
         note: l.note,
       });
       map.set(s.date, arr);
@@ -542,10 +549,14 @@ function groupLoadsByDate(sheets: ProductionSheet[]) {
   }
   return Array.from(map.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([date, loads]) => ({
-      date,
-      loads: loads.sort((a, b) => a.driver.localeCompare(b.driver)),
-    }));
+    .map(([date, loads]) => {
+      const totalSiteMin = loads.reduce((a, l) => a + (l.siteMin ?? 0), 0);
+      return {
+        date,
+        loads: loads.sort((a, b) => a.driver.localeCompare(b.driver)),
+        totalSiteHours: round1(totalSiteMin / 60),
+      };
+    });
 }
 
 function aggregatePayroll(sheets: ProductionSheet[]) {
