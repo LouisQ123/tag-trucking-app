@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ProductionSheet } from "@/lib/types/database";
 import BarList from "@/components/charts/BarList";
-import TrendChart from "@/components/charts/TrendChart";
 import { softDeleteSheet, exportAllData } from "@/lib/actions/admin";
 
 const SERIES = { blue: "var(--series-blue)", green: "var(--series-green)", orange: "var(--accent)" };
@@ -32,10 +31,6 @@ function fmtDate(iso: string) {
     day: "numeric",
     year: "numeric",
   });
-}
-function fmtShortDate(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 function inRange(dateISO: string, range: RangeKey, customFrom: string, customTo: string) {
   if (range === "all") return true;
@@ -161,7 +156,6 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const byTruckMiles = aggregate(filtered, (s) => s.truck_number, (s) => s.total_miles ?? 0);
   const byCompanyLoads = aggregateLoads(filtered, (l) => l.company);
   const byJobSiteTime = aggregateJobSiteTime(filtered);
-  const byDay = aggregateDay(filtered);
   const payroll = aggregatePayroll(filtered);
 
   return (
@@ -282,10 +276,6 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
               <BarList data={byJobSiteTime} color={SERIES.green} unit="hrs" />
             </ChartCard>
           </div>
-          <ChartCard title="Daily Load Volume" caption="Loads logged per day">
-            <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
-          </ChartCard>
-
           <div className="bg-surface border border-border rounded-xl p-4.5">
             <p className="text-[13px] font-extrabold mb-0.5">Payroll</p>
             <p className="text-[11.5px] text-muted mb-3.5">
@@ -437,16 +427,6 @@ function aggregateLoads(sheets: ProductionSheet[], keyFn: (l: { company: string 
   return Array.from(map, ([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 12);
-}
-
-function aggregateDay(sheets: ProductionSheet[]) {
-  const map = new Map<string, number>();
-  for (const s of sheets) {
-    map.set(s.date, (map.get(s.date) ?? 0) + (s.loads?.length ?? 0));
-  }
-  return Array.from(map.keys())
-    .sort()
-    .map((d) => ({ label: fmtDate(d), shortLabel: fmtShortDate(d), value: map.get(d)! }));
 }
 
 function aggregateJobSiteTime(sheets: ProductionSheet[]) {
