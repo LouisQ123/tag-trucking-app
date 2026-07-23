@@ -16,8 +16,6 @@ interface LoadRow {
   company: string;
   jobSiteArrivalTime: string;
   jobSiteDepartureTime: string;
-  dumpingArrivalTime: string;
-  dumpingDepartureTime: string;
 }
 
 function newLoad(): LoadRow {
@@ -29,8 +27,6 @@ function newLoad(): LoadRow {
     company: "",
     jobSiteArrivalTime: "",
     jobSiteDepartureTime: "",
-    dumpingArrivalTime: "",
-    dumpingDepartureTime: "",
   };
 }
 
@@ -66,8 +62,6 @@ export default function EditSheetForm({
           company: l.company ?? "",
           jobSiteArrivalTime: l.job_site_arrival_time ?? "",
           jobSiteDepartureTime: l.job_site_departure_time ?? "",
-          dumpingArrivalTime: l.dumping_arrival_time ?? "",
-          dumpingDepartureTime: l.dumping_departure_time ?? "",
         }))
       : [newLoad()]
   );
@@ -325,28 +319,6 @@ export default function EditSheetForm({
                     name={`load-${row.key}-job-departure`}
                     defaultValue={row.jobSiteDepartureTime}
                     onChange={(v) => updateLoad(row.key, "jobSiteDepartureTime", v)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    Dumping Arrival
-                  </span>
-                  <TimeInput
-                    name={`load-${row.key}-dump-arrival`}
-                    defaultValue={row.dumpingArrivalTime}
-                    onChange={(v) => updateLoad(row.key, "dumpingArrivalTime", v)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    Dumping Departure
-                  </span>
-                  <TimeInput
-                    name={`load-${row.key}-dump-departure`}
-                    defaultValue={row.dumpingDepartureTime}
-                    onChange={(v) => updateLoad(row.key, "dumpingDepartureTime", v)}
                   />
                 </div>
               </div>

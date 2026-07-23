@@ -154,7 +154,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
     dumpingLoadsTimed = 0;
   for (const s of filtered) {
     for (const l of s.loads ?? []) {
-      const mins = minutesBetween(l.dumping_arrival_time, l.dumping_departure_time);
+      const mins = minutesBetween(l.job_site_arrival_time, l.job_site_departure_time);
       if (mins !== null) {
         totalDumpingMin += mins;
         dumpingLoadsTimed += 1;
@@ -464,7 +464,7 @@ function aggregateDumpingTime(sheets: ProductionSheet[]) {
   const map = new Map<string, { totalMin: number; count: number }>();
   for (const s of sheets) {
     for (const l of s.loads ?? []) {
-      const mins = minutesBetween(l.dumping_arrival_time, l.dumping_departure_time);
+      const mins = minutesBetween(l.job_site_arrival_time, l.job_site_departure_time);
       if (mins === null || !l.dumping) continue;
       const entry = map.get(l.dumping) ?? { totalMin: 0, count: 0 };
       entry.totalMin += mins;
