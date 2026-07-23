@@ -69,12 +69,6 @@ function minutesBetween(start: string | null, end: string | null): number | null
   if (diff < 0) diff += 24 * 60;
   return diff;
 }
-function fmtMinutes(mins: number) {
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
 export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }) {
   const router = useRouter();
   const [range, setRange] = useState<RangeKey>("30");
@@ -265,7 +259,8 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
             <Kpi label="Avg Fuel Efficiency" value={avgMpg !== null ? String(round1(avgMpg)) : "—"} unit={avgMpg !== null ? "mpg" : ""} />
             <Kpi
               label="Avg Time at Job Site"
-              value={avgJobSiteMin !== null ? fmtMinutes(avgJobSiteMin) : "—"}
+              value={avgJobSiteMin !== null ? String(round1(avgJobSiteMin / 60)) : "—"}
+              unit={avgJobSiteMin !== null ? "hrs" : ""}
               sub={jobSiteLoadsTimed > 0 ? `${jobSiteLoadsTimed} loads timed` : undefined}
             />
             <Kpi label="Active Drivers" value={activeDrivers.toLocaleString()} />
@@ -289,8 +284,8 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
             </ChartCard>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-            <ChartCard title="Time at Job Site / Plant" caption="Average minutes from arrival to departure">
-              <BarList data={byJobSiteTime} color={SERIES.green} unit="min" />
+            <ChartCard title="Time at Job Site / Plant" caption="Average hours from arrival to departure">
+              <BarList data={byJobSiteTime} color={SERIES.green} unit="hrs" />
             </ChartCard>
             <ChartCard title="Daily Load Volume" caption="Loads logged per day">
               <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
@@ -472,7 +467,7 @@ function aggregateJobSiteTime(sheets: ProductionSheet[]) {
       map.set(l.job_site, entry);
     }
   }
-  return Array.from(map, ([label, v]) => ({ label, value: Math.round(v.totalMin / v.count) }))
+  return Array.from(map, ([label, v]) => ({ label, value: round1(v.totalMin / v.count / 60) }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 12);
 }
