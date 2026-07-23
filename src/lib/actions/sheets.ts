@@ -11,8 +11,10 @@ interface LoadInput {
   dumping: string;
   type: string;
   company: string;
-  arrivalTime: string;
-  departureTime: string;
+  jobSiteArrivalTime: string;
+  jobSiteDepartureTime: string;
+  dumpingArrivalTime: string;
+  dumpingDepartureTime: string;
 }
 
 function toNumberOrNull(v: FormDataEntryValue | null): number | null {
@@ -34,10 +36,22 @@ function parseLoads(formData: FormData): LoadInput[] {
       dumping: (l.dumping || "").trim(),
       type: (l.type || "").trim(),
       company: (l.company || "").trim(),
-      arrivalTime: (l.arrivalTime || "").trim(),
-      departureTime: (l.departureTime || "").trim(),
+      jobSiteArrivalTime: (l.jobSiteArrivalTime || "").trim(),
+      jobSiteDepartureTime: (l.jobSiteDepartureTime || "").trim(),
+      dumpingArrivalTime: (l.dumpingArrivalTime || "").trim(),
+      dumpingDepartureTime: (l.dumpingDepartureTime || "").trim(),
     }))
-    .filter((l) => l.jobSite || l.dumping || l.type || l.company || l.arrivalTime || l.departureTime);
+    .filter(
+      (l) =>
+        l.jobSite ||
+        l.dumping ||
+        l.type ||
+        l.company ||
+        l.jobSiteArrivalTime ||
+        l.jobSiteDepartureTime ||
+        l.dumpingArrivalTime ||
+        l.dumpingDepartureTime
+    );
 }
 
 export async function submitSheet(
@@ -93,8 +107,10 @@ export async function submitSheet(
         dumping: l.dumping || null,
         type: l.type || null,
         company: l.company || null,
-        arrival_time: l.arrivalTime || null,
-        departure_time: l.departureTime || null,
+        job_site_arrival_time: l.jobSiteArrivalTime || null,
+        job_site_departure_time: l.jobSiteDepartureTime || null,
+        dumping_arrival_time: l.dumpingArrivalTime || null,
+        dumping_departure_time: l.dumpingDepartureTime || null,
       }))
     );
     if (loadsError) {
@@ -157,8 +173,10 @@ export async function updateSheet(_prev: ActionState, formData: FormData): Promi
         dumping: l.dumping || null,
         type: l.type || null,
         company: l.company || null,
-        arrival_time: l.arrivalTime || null,
-        departure_time: l.departureTime || null,
+        job_site_arrival_time: l.jobSiteArrivalTime || null,
+        job_site_departure_time: l.jobSiteDepartureTime || null,
+        dumping_arrival_time: l.dumpingArrivalTime || null,
+        dumping_departure_time: l.dumpingDepartureTime || null,
       }))
     );
     if (loadsError) return { error: loadsError.message };

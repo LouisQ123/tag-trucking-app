@@ -14,8 +14,10 @@ interface LoadRow {
   dumping: string;
   type: string;
   company: string;
-  arrivalTime: string;
-  departureTime: string;
+  jobSiteArrivalTime: string;
+  jobSiteDepartureTime: string;
+  dumpingArrivalTime: string;
+  dumpingDepartureTime: string;
 }
 
 function newLoad(): LoadRow {
@@ -25,8 +27,10 @@ function newLoad(): LoadRow {
     dumping: "",
     type: "",
     company: "",
-    arrivalTime: "",
-    departureTime: "",
+    jobSiteArrivalTime: "",
+    jobSiteDepartureTime: "",
+    dumpingArrivalTime: "",
+    dumpingDepartureTime: "",
   };
 }
 
@@ -60,8 +64,10 @@ export default function EditSheetForm({
           dumping: l.dumping ?? "",
           type: l.type ?? "",
           company: l.company ?? "",
-          arrivalTime: l.arrival_time ?? "",
-          departureTime: l.departure_time ?? "",
+          jobSiteArrivalTime: l.job_site_arrival_time ?? "",
+          jobSiteDepartureTime: l.job_site_departure_time ?? "",
+          dumpingArrivalTime: l.dumping_arrival_time ?? "",
+          dumpingDepartureTime: l.dumping_departure_time ?? "",
         }))
       : [newLoad()]
   );
@@ -306,9 +312,9 @@ export default function EditSheetForm({
                     Job Site Arrival
                   </span>
                   <TimeInput
-                    name={`load-${row.key}-arrival`}
-                    defaultValue={row.arrivalTime}
-                    onChange={(v) => updateLoad(row.key, "arrivalTime", v)}
+                    name={`load-${row.key}-job-arrival`}
+                    defaultValue={row.jobSiteArrivalTime}
+                    onChange={(v) => updateLoad(row.key, "jobSiteArrivalTime", v)}
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -316,9 +322,31 @@ export default function EditSheetForm({
                     Job Site Departure
                   </span>
                   <TimeInput
-                    name={`load-${row.key}-departure`}
-                    defaultValue={row.departureTime}
-                    onChange={(v) => updateLoad(row.key, "departureTime", v)}
+                    name={`load-${row.key}-job-departure`}
+                    defaultValue={row.jobSiteDepartureTime}
+                    onChange={(v) => updateLoad(row.key, "jobSiteDepartureTime", v)}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Dumping Arrival
+                  </span>
+                  <TimeInput
+                    name={`load-${row.key}-dump-arrival`}
+                    defaultValue={row.dumpingArrivalTime}
+                    onChange={(v) => updateLoad(row.key, "dumpingArrivalTime", v)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Dumping Departure
+                  </span>
+                  <TimeInput
+                    name={`load-${row.key}-dump-departure`}
+                    defaultValue={row.dumpingDepartureTime}
+                    onChange={(v) => updateLoad(row.key, "dumpingDepartureTime", v)}
                   />
                 </div>
               </div>

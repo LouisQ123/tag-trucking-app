@@ -81,14 +81,34 @@ create table if not exists public.loads (
   dumping text,
   type text,
   company text,
-  arrival_time time,
-  departure_time time
+  job_site_arrival_time time,
+  job_site_departure_time time,
+  dumping_arrival_time time,
+  dumping_departure_time time
 );
 
 -- Safe to re-run on a database that already has this table from before
--- these two columns existed.
-alter table public.loads add column if not exists arrival_time time;
-alter table public.loads add column if not exists departure_time time;
+-- these columns existed. The rename only fires if the old names are still
+-- there (a fresh install's create table above already used the new names).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'loads' and column_name = 'arrival_time'
+  ) then
+    alter table public.loads rename column arrival_time to job_site_arrival_time;
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'loads' and column_name = 'departure_time'
+  ) then
+    alter table public.loads rename column departure_time to job_site_departure_time;
+  end if;
+end $$;
+alter table public.loads add column if not exists job_site_arrival_time time;
+alter table public.loads add column if not exists job_site_departure_time time;
+alter table public.loads add column if not exists dumping_arrival_time time;
+alter table public.loads add column if not exists dumping_departure_time time;
 
 create index if not exists loads_sheet_idx on public.loads (sheet_id);
 

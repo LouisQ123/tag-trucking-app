@@ -22,8 +22,10 @@ export interface Load {
   dumping: string | null;
   type: string | null;
   company: string | null;
-  arrival_time: string | null;
-  departure_time: string | null;
+  job_site_arrival_time: string | null;
+  job_site_departure_time: string | null;
+  dumping_arrival_time: string | null;
+  dumping_departure_time: string | null;
 }
 
 export interface ProductionSheet {

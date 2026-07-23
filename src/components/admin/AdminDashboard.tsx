@@ -58,6 +58,22 @@ function uniqSorted(values: (string | null | undefined)[]) {
 function currency(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
+// Minutes between two "HH:MM" (or "HH:MM:SS") times, wrapping past midnight
+// the same way the shift-hours calculation does.
+function minutesBetween(start: string | null, end: string | null): number | null {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return null;
+  let diff = eh * 60 + em - (sh * 60 + sm);
+  if (diff < 0) diff += 24 * 60;
+  return diff;
+}
+function fmtMinutes(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }) {
   const router = useRouter();
@@ -134,10 +150,24 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const avgMpg = totalFuel > 0 ? totalMiles / totalFuel : null;
   const activeDrivers = new Set(filtered.map((s) => s.profiles?.full_name).filter(Boolean)).size;
 
+  let totalDumpingMin = 0,
+    dumpingLoadsTimed = 0;
+  for (const s of filtered) {
+    for (const l of s.loads ?? []) {
+      const mins = minutesBetween(l.dumping_arrival_time, l.dumping_departure_time);
+      if (mins !== null) {
+        totalDumpingMin += mins;
+        dumpingLoadsTimed += 1;
+      }
+    }
+  }
+  const avgDumpingMin = dumpingLoadsTimed > 0 ? totalDumpingMin / dumpingLoadsTimed : null;
+
   const byDriverLoads = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.loads?.length ?? 0);
   const byDriverMiles = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.total_miles ?? 0);
   const byTruckMiles = aggregate(filtered, (s) => s.truck_number, (s) => s.total_miles ?? 0);
   const byCompanyLoads = aggregateLoads(filtered, (l) => l.company);
+  const byDumpingTime = aggregateDumpingTime(filtered);
   const byDay = aggregateDay(filtered);
   const payroll = aggregatePayroll(filtered);
 
@@ -228,11 +258,16 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
             <Kpi label="Total Loads" value={totalLoads.toLocaleString()} sub={`${filtered.length} sheets`} />
             <Kpi label="Total Miles" value={totalMiles.toLocaleString()} unit="mi" />
             <Kpi label="Total Hours" value={round1(totalHours).toLocaleString()} unit="hrs" />
             <Kpi label="Avg Fuel Efficiency" value={avgMpg !== null ? String(round1(avgMpg)) : "—"} unit={avgMpg !== null ? "mpg" : ""} />
+            <Kpi
+              label="Avg Time at Dumping"
+              value={avgDumpingMin !== null ? fmtMinutes(avgDumpingMin) : "—"}
+              sub={dumpingLoadsTimed > 0 ? `${dumpingLoadsTimed} loads timed` : undefined}
+            />
             <Kpi label="Active Drivers" value={activeDrivers.toLocaleString()} />
             <Kpi label="Labor Cost" value={currency(totalLaborCost)} accent />
           </div>
@@ -253,9 +288,14 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
               <BarList data={byCompanyLoads} color={SERIES.orange} />
             </ChartCard>
           </div>
-          <ChartCard title="Daily Load Volume" caption="Loads logged per day">
-            <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
-          </ChartCard>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+            <ChartCard title="Time at Dumping by Location" caption="Average minutes from arrival to departure">
+              <BarList data={byDumpingTime} color={SERIES.green} unit="min" />
+            </ChartCard>
+            <ChartCard title="Daily Load Volume" caption="Loads logged per day">
+              <TrendChart points={byDay} color={SERIES.orange} unit=" loads" />
+            </ChartCard>
+          </div>
 
           <div className="bg-surface border border-border rounded-xl p-4.5">
             <p className="text-[13px] font-extrabold mb-0.5">Payroll</p>
@@ -418,6 +458,23 @@ function aggregateDay(sheets: ProductionSheet[]) {
   return Array.from(map.keys())
     .sort()
     .map((d) => ({ label: fmtDate(d), shortLabel: fmtShortDate(d), value: map.get(d)! }));
+}
+
+function aggregateDumpingTime(sheets: ProductionSheet[]) {
+  const map = new Map<string, { totalMin: number; count: number }>();
+  for (const s of sheets) {
+    for (const l of s.loads ?? []) {
+      const mins = minutesBetween(l.dumping_arrival_time, l.dumping_departure_time);
+      if (mins === null || !l.dumping) continue;
+      const entry = map.get(l.dumping) ?? { totalMin: 0, count: 0 };
+      entry.totalMin += mins;
+      entry.count += 1;
+      map.set(l.dumping, entry);
+    }
+  }
+  return Array.from(map, ([label, v]) => ({ label, value: Math.round(v.totalMin / v.count) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12);
 }
 
 function aggregatePayroll(sheets: ProductionSheet[]) {
