@@ -30,7 +30,7 @@ export default async function DriverHome() {
           </p>
         </div>
 
-        <SheetForm defaultTruck={profile.truck_number ?? ""} />
+        <SheetForm defaultTruck={profile.truck_number ?? ""} driverId={profile.id} />
 
         <History sheets={(sheets as ProductionSheet[]) ?? []} />
       </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { submitSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES } from "@/lib/loadOptions";
@@ -14,6 +14,20 @@ interface LoadRow {
   company: string;
   jobSiteArrivalTime: string;
   jobSiteDepartureTime: string;
+}
+
+interface Draft {
+  date: string;
+  truck: string;
+  startTime: string;
+  endTime: string;
+  hours: string;
+  hoursTouched: boolean;
+  fuel: string;
+  startMiles: string;
+  endMiles: string;
+  remarks: string;
+  loads: LoadRow[];
 }
 
 function todayISO() {
@@ -35,9 +49,44 @@ function newLoad(): LoadRow {
   };
 }
 
+function draftKey(driverId: string) {
+  return `atg-sheet-draft-${driverId}`;
+}
+
+// In-progress sheets are saved to this device (not the server) so a driver
+// filling this out across a shift — closing the app, losing signal, a
+// phone restart — doesn't lose their progress. Cleared once actually
+// submitted. Guarded for SSR, where localStorage doesn't exist.
+function loadDraft(driverId: string): Draft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(draftKey(driverId));
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null;
+  }
+}
+function saveDraft(driverId: string, draft: Draft) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(draftKey(driverId), JSON.stringify(draft));
+  } catch {
+    // Storage full or disabled — the driver can still submit normally,
+    // they just won't get autosave.
+  }
+}
+function clearDraft(driverId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(draftKey(driverId));
+  } catch {
+    // ignore
+  }
+}
+
 const initialState: ActionState = {};
 
-export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
+export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: string; driverId: string }) {
   const [state, formAction, pending] = useActionState(submitSheet, initialState);
   const [dismissed, setDismissed] = useState(false);
   const [savedDate, setSavedDate] = useState("");
@@ -55,8 +104,17 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
   const [loads, setLoads] = useState<LoadRow[]>([newLoad(), newLoad()]);
   // Start/End Time are uncontrolled (see TimeInput) so normal typing never
   // remounts them. Bumping this key is the only way we force them back to
-  // blank — on "Clear" and after a successful submit.
+  // blank — on "Clear", after a successful submit, or restoring a draft.
   const [timeResetKey, setTimeResetKey] = useState(0);
+  const [draftRestored, setDraftRestored] = useState(false);
+  // Guards the autosave effect from firing (and overwriting a real draft
+  // with these blank initial values) before we've had a chance to restore.
+  // State, not a ref: the restore effect's setState calls for date/truck/etc
+  // don't apply until the next render, so if this were a ref, the autosave
+  // effect (running in that same initial commit) would still read the old
+  // blank closure values yet see the ref already flipped to true, and
+  // immediately overwrite the draft it just restored with those blanks.
+  const [hydrated, setHydrated] = useState(false);
 
   function clearFields() {
     setDate(todayISO());
@@ -71,7 +129,67 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
     setRemarks("");
     setLoads([newLoad(), newLoad()]);
     setTimeResetKey((k) => k + 1);
+    setDraftRestored(false);
+    clearDraft(driverId);
   }
+
+  // Restore any in-progress draft for this driver once, on mount. This is
+  // a legitimate use of an effect (unlike a plain "adjust state during
+  // render" case) — localStorage is an external system unavailable during
+  // render/SSR, so it can only be read here.
+  useEffect(() => {
+    const draft = loadDraft(driverId);
+    if (draft) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDate(draft.date || todayISO());
+      setTruck(draft.truck || defaultTruck);
+      setStartTime(draft.startTime || "");
+      setEndTime(draft.endTime || "");
+      setHours(draft.hours || "");
+      setHoursTouched(!!draft.hoursTouched);
+      setFuel(draft.fuel || "");
+      setStartMiles(draft.startMiles || "");
+      setEndMiles(draft.endMiles || "");
+      setRemarks(draft.remarks || "");
+      setLoads(draft.loads?.length ? draft.loads : [newLoad(), newLoad()]);
+      setTimeResetKey((k) => k + 1);
+      setDraftRestored(true);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave the in-progress sheet to this device on every change.
+  useEffect(() => {
+    if (!hydrated) return;
+    saveDraft(driverId, {
+      date,
+      truck,
+      startTime,
+      endTime,
+      hours,
+      hoursTouched,
+      fuel,
+      startMiles,
+      endMiles,
+      remarks,
+      loads,
+    });
+  }, [
+    hydrated,
+    driverId,
+    date,
+    truck,
+    startTime,
+    endTime,
+    hours,
+    hoursTouched,
+    fuel,
+    startMiles,
+    endMiles,
+    remarks,
+    loads,
+  ]);
 
   // After a successful submit, clear the form for the next entry and
   // surface a dismissible confirmation banner. Adjusted during render
@@ -135,6 +253,14 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
         ))}
       </datalist>
 
+      {draftRestored && !succeeded && (
+        <div className="rounded-lg bg-accent-dim border border-accent/30 text-sm font-semibold px-4 py-3 flex items-center justify-between gap-3">
+          <span>Restored your in-progress sheet from earlier this shift.</span>
+          <button type="button" onClick={() => setDraftRestored(false)} className="text-xs underline font-bold">
+            Dismiss
+          </button>
+        </div>
+      )}
       {succeeded && (
         <div className="rounded-lg bg-good/10 border border-good/30 text-sm font-semibold px-4 py-3 flex items-center justify-between gap-3">
           <span>Sheet saved for {savedDate}.</span>
@@ -319,7 +445,7 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
                     Job Site Arrival
                   </span>
                   <TimeInput
-                    name={`load-${row.key}-job-arrival`}
+                    name={`load-${i}-job-arrival`}
                     defaultValue={row.jobSiteArrivalTime}
                     onChange={(v) => updateLoad(row.key, "jobSiteArrivalTime", v)}
                   />
@@ -329,7 +455,7 @@ export default function SheetForm({ defaultTruck }: { defaultTruck: string }) {
                     Job Site Departure
                   </span>
                   <TimeInput
-                    name={`load-${row.key}-job-departure`}
+                    name={`load-${i}-job-departure`}
                     defaultValue={row.jobSiteDepartureTime}
                     onChange={(v) => updateLoad(row.key, "jobSiteDepartureTime", v)}
                   />

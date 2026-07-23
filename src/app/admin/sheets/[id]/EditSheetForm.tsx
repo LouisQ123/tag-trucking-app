@@ -306,7 +306,7 @@ export default function EditSheetForm({
                     Job Site Arrival
                   </span>
                   <TimeInput
-                    name={`load-${row.key}-job-arrival`}
+                    name={`load-${i}-job-arrival`}
                     defaultValue={row.jobSiteArrivalTime}
                     onChange={(v) => updateLoad(row.key, "jobSiteArrivalTime", v)}
                   />
@@ -316,7 +316,7 @@ export default function EditSheetForm({
                     Job Site Departure
                   </span>
                   <TimeInput
-                    name={`load-${row.key}-job-departure`}
+                    name={`load-${i}-job-departure`}
                     defaultValue={row.jobSiteDepartureTime}
                     onChange={(v) => updateLoad(row.key, "jobSiteDepartureTime", v)}
                   />
