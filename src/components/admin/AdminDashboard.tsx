@@ -32,6 +32,14 @@ function fmtDate(iso: string) {
     year: "numeric",
   });
 }
+function fmtTime(t: string | null) {
+  if (!t) return "—";
+  const [h, m] = t.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return "—";
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 function inRange(dateISO: string, range: RangeKey, customFrom: string, customTo: string) {
   if (range === "all") return true;
   if (range === "custom") {
@@ -157,6 +165,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const byCompanyLoads = aggregateLoads(filtered, (l) => l.company);
   const byJobSiteTime = aggregateJobSiteTime(filtered);
   const payroll = aggregatePayroll(filtered);
+  const dailyLoads = groupLoadsByDate(filtered);
 
   return (
     <div className="flex flex-col gap-5">
@@ -370,6 +379,57 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
               </table>
             </div>
           </div>
+
+          <div className="bg-surface border border-border rounded-xl p-4.5">
+            <p className="text-[13px] font-extrabold mb-0.5">Daily Load Summary</p>
+            <p className="text-[11.5px] text-muted mb-3.5">
+              Every load logged, grouped by day, most recent first
+            </p>
+            <div className="flex flex-col gap-5">
+              {dailyLoads.map(({ date, loads }) => (
+                <div key={date}>
+                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-2">
+                    {fmtDate(date)}{" "}
+                    <span className="text-ink-2 normal-case font-semibold">
+                      · {loads.length} load{loads.length === 1 ? "" : "s"}
+                    </span>
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[860px]">
+                      <thead>
+                        <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
+                          <th className="py-2 pr-3">Driver</th>
+                          <th className="py-2 pr-3">Truck</th>
+                          <th className="py-2 pr-3">Job Site</th>
+                          <th className="py-2 pr-3">Dumping</th>
+                          <th className="py-2 pr-3">Material</th>
+                          <th className="py-2 pr-3">Company</th>
+                          <th className="py-2 pr-3">Arrival</th>
+                          <th className="py-2 pr-3">Departure</th>
+                          <th className="py-2">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loads.map((l) => (
+                          <tr key={l.id} className="border-t border-grid">
+                            <td className="py-2 pr-3 font-semibold tabular-nums">{l.driver}</td>
+                            <td className="py-2 pr-3 tabular-nums">{l.truck}</td>
+                            <td className="py-2 pr-3">{l.jobSite || "—"}</td>
+                            <td className="py-2 pr-3">{l.dumping || "—"}</td>
+                            <td className="py-2 pr-3">{l.type || "—"}</td>
+                            <td className="py-2 pr-3">{l.company || "—"}</td>
+                            <td className="py-2 pr-3 tabular-nums">{fmtTime(l.arrival)}</td>
+                            <td className="py-2 pr-3 tabular-nums">{fmtTime(l.departure)}</td>
+                            <td className="py-2 text-ink-2">{l.note || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -444,6 +504,48 @@ function aggregateJobSiteTime(sheets: ProductionSheet[]) {
   return Array.from(map, ([label, v]) => ({ label, value: round1(v.totalMin / v.count / 60) }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 12);
+}
+
+function groupLoadsByDate(sheets: ProductionSheet[]) {
+  const map = new Map<
+    string,
+    Array<{
+      id: string;
+      driver: string;
+      truck: string;
+      jobSite: string | null;
+      dumping: string | null;
+      type: string | null;
+      company: string | null;
+      arrival: string | null;
+      departure: string | null;
+      note: string | null;
+    }>
+  >();
+  for (const s of sheets) {
+    for (const l of s.loads ?? []) {
+      const arr = map.get(s.date) ?? [];
+      arr.push({
+        id: l.id,
+        driver: s.profiles?.full_name ?? "—",
+        truck: s.truck_number ?? "—",
+        jobSite: l.job_site,
+        dumping: l.dumping,
+        type: l.type,
+        company: l.company,
+        arrival: l.job_site_arrival_time,
+        departure: l.job_site_departure_time,
+        note: l.note,
+      });
+      map.set(s.date, arr);
+    }
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, loads]) => ({
+      date,
+      loads: loads.sort((a, b) => a.driver.localeCompare(b.driver)),
+    }));
 }
 
 function aggregatePayroll(sheets: ProductionSheet[]) {
