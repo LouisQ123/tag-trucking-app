@@ -24,6 +24,7 @@ export interface Load {
   company: string | null;
   job_site_arrival_time: string | null;
   job_site_departure_time: string | null;
+  note: string | null;
 }
 
 export interface ProductionSheet {

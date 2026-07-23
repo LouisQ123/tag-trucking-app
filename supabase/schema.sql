@@ -84,7 +84,8 @@ create table if not exists public.loads (
   job_site_arrival_time time,
   job_site_departure_time time,
   dumping_arrival_time time,
-  dumping_departure_time time
+  dumping_departure_time time,
+  note text
 );
 
 -- Safe to re-run on a database that already has this table from before
@@ -109,6 +110,7 @@ alter table public.loads add column if not exists job_site_arrival_time time;
 alter table public.loads add column if not exists job_site_departure_time time;
 alter table public.loads add column if not exists dumping_arrival_time time;
 alter table public.loads add column if not exists dumping_departure_time time;
+alter table public.loads add column if not exists note text;
 
 create index if not exists loads_sheet_idx on public.loads (sheet_id);
 

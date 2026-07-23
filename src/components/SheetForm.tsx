@@ -14,6 +14,7 @@ interface LoadRow {
   company: string;
   jobSiteArrivalTime: string;
   jobSiteDepartureTime: string;
+  note: string;
 }
 
 interface Draft {
@@ -46,6 +47,7 @@ function newLoad(): LoadRow {
     company: "",
     jobSiteArrivalTime: "",
     jobSiteDepartureTime: "",
+    note: "",
   };
 }
 
@@ -461,6 +463,13 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
                   />
                 </div>
               </div>
+              <textarea
+                className="input-sm resize-y"
+                placeholder="Note for this load (optional)"
+                rows={2}
+                value={row.note}
+                onChange={(e) => updateLoad(row.key, "note", e.target.value)}
+              />
             </div>
           ))}
         </div>

@@ -16,6 +16,7 @@ interface LoadRow {
   company: string;
   jobSiteArrivalTime: string;
   jobSiteDepartureTime: string;
+  note: string;
 }
 
 function newLoad(): LoadRow {
@@ -27,6 +28,7 @@ function newLoad(): LoadRow {
     company: "",
     jobSiteArrivalTime: "",
     jobSiteDepartureTime: "",
+    note: "",
   };
 }
 
@@ -62,6 +64,7 @@ export default function EditSheetForm({
           company: l.company ?? "",
           jobSiteArrivalTime: l.job_site_arrival_time ?? "",
           jobSiteDepartureTime: l.job_site_departure_time ?? "",
+          note: l.note ?? "",
         }))
       : [newLoad()]
   );
@@ -322,6 +325,13 @@ export default function EditSheetForm({
                   />
                 </div>
               </div>
+              <textarea
+                className="input-sm resize-y"
+                placeholder="Note for this load (optional)"
+                rows={2}
+                value={row.note}
+                onChange={(e) => updateLoad(row.key, "note", e.target.value)}
+              />
             </div>
           ))}
         </div>

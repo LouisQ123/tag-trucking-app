@@ -13,6 +13,7 @@ interface LoadInput {
   company: string;
   jobSiteArrivalTime: string;
   jobSiteDepartureTime: string;
+  note: string;
 }
 
 function toNumberOrNull(v: FormDataEntryValue | null): number | null {
@@ -36,9 +37,17 @@ function parseLoads(formData: FormData): LoadInput[] {
       company: (l.company || "").trim(),
       jobSiteArrivalTime: (l.jobSiteArrivalTime || "").trim(),
       jobSiteDepartureTime: (l.jobSiteDepartureTime || "").trim(),
+      note: (l.note || "").trim(),
     }))
     .filter(
-      (l) => l.jobSite || l.dumping || l.type || l.company || l.jobSiteArrivalTime || l.jobSiteDepartureTime
+      (l) =>
+        l.jobSite ||
+        l.dumping ||
+        l.type ||
+        l.company ||
+        l.jobSiteArrivalTime ||
+        l.jobSiteDepartureTime ||
+        l.note
     );
 }
 
@@ -97,6 +106,7 @@ export async function submitSheet(
         company: l.company || null,
         job_site_arrival_time: l.jobSiteArrivalTime || null,
         job_site_departure_time: l.jobSiteDepartureTime || null,
+        note: l.note || null,
       }))
     );
     if (loadsError) {
@@ -161,6 +171,7 @@ export async function updateSheet(_prev: ActionState, formData: FormData): Promi
         company: l.company || null,
         job_site_arrival_time: l.jobSiteArrivalTime || null,
         job_site_departure_time: l.jobSiteDepartureTime || null,
+        note: l.note || null,
       }))
     );
     if (loadsError) return { error: loadsError.message };
