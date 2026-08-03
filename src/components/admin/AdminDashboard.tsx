@@ -101,8 +101,14 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
 
   const [exporting, setExporting] = useState(false);
 
-  async function handleDelete(id: string) {
-    if (!confirm("Move this production sheet to Trash? You can restore it later from Trash.")) return;
+  async function handleDelete(s: ProductionSheet) {
+    if (
+      !confirm(
+        `Move ${s.driver_name}'s sheet from ${fmtDate(s.date)} (truck ${s.truck_number ?? "—"}) to Trash?\n\nYou can restore it later from Trash.`
+      )
+    )
+      return;
+    const id = s.id;
     setDeletingId(id);
     try {
       await softDeleteSheet(id);
@@ -425,18 +431,18 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                         <td className="py-2 pr-3">{s.hours ?? "—"}</td>
                         <td className="py-2 pr-3">{s.labor_cost !== null ? currency(s.labor_cost) : "—"}</td>
                         <td className="py-2">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-3">
                             <Link
                               href={`/admin/sheets/${s.id}`}
-                              className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-ink hover:border-ink-2 text-xs flex items-center justify-center"
+                              className="w-8 h-8 rounded-md border border-border text-muted hover:text-ink hover:border-ink-2 text-sm flex items-center justify-center"
                               aria-label="Edit sheet"
                             >
                               ✎
                             </Link>
                             <button
-                              onClick={() => handleDelete(s.id)}
+                              onClick={() => handleDelete(s)}
                               disabled={deletingId === s.id}
-                              className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-xs disabled:opacity-50"
+                              className="w-8 h-8 rounded-md border border-critical/30 text-critical/70 hover:text-critical hover:border-critical hover:bg-critical/10 text-sm disabled:opacity-50"
                               aria-label="Move sheet to trash"
                             >
                               ×
