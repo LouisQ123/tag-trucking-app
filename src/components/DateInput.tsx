@@ -50,9 +50,11 @@ export default function DateInput({
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"days" | "years">("days");
   const initial = parseISO(defaultValue) ?? new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
+  const [yearRangeStart, setYearRangeStart] = useState(initial.getFullYear() - 5);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,6 +77,8 @@ export default function DateInput({
     const cur = parseISO(value) ?? new Date();
     setViewYear(cur.getFullYear());
     setViewMonth(cur.getMonth());
+    setYearRangeStart(cur.getFullYear() - 5);
+    setMode("days");
     setOpen((o) => !o);
   }
 
@@ -83,6 +87,11 @@ export default function DateInput({
     setValue(iso);
     onChange?.(iso);
     setOpen(false);
+  }
+
+  function selectYear(y: number) {
+    setViewYear(y);
+    setMode("days");
   }
 
   function prevMonth() {
@@ -145,53 +154,81 @@ export default function DateInput({
           <div className="flex items-center justify-between mb-2.5">
             <button
               type="button"
-              onClick={prevMonth}
-              aria-label="Previous month"
+              onClick={mode === "days" ? prevMonth : () => setYearRangeStart((y) => y - 12)}
+              aria-label={mode === "days" ? "Previous month" : "Previous years"}
               className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center"
             >
               ‹
             </button>
-            <span className="text-[13px] font-bold">
-              {MONTH_LABELS[viewMonth]} {viewYear}
-            </span>
             <button
               type="button"
-              onClick={nextMonth}
-              aria-label="Next month"
+              onClick={() => setMode(mode === "days" ? "years" : "days")}
+              className="text-[13px] font-bold rounded-md px-2 py-1 hover:bg-surface-2"
+            >
+              {mode === "days" ? `${MONTH_LABELS[viewMonth]} ${viewYear}` : `${yearRangeStart} – ${yearRangeStart + 11}`}
+            </button>
+            <button
+              type="button"
+              onClick={mode === "days" ? nextMonth : () => setYearRangeStart((y) => y + 12)}
+              aria-label={mode === "days" ? "Next month" : "Next years"}
               className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center"
             >
               ›
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted mb-1">
-            {WEEKDAY_LABELS.map((w, i) => (
-              <div key={`${w}-${i}`}>{w}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map(({ date, inMonth }, i) => {
-              const isSelected = selectedDate && isSameDay(date, selectedDate);
-              const isToday = isSameDay(date, today);
-              return (
+
+          {mode === "years" ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {Array.from({ length: 12 }, (_, i) => yearRangeStart + i).map((y) => (
                 <button
                   type="button"
-                  key={i}
-                  onClick={() => selectDay(date)}
-                  className={`h-8 w-8 rounded-md text-xs font-semibold tabular-nums ${
-                    isSelected
+                  key={y}
+                  onClick={() => selectYear(y)}
+                  className={`h-9 rounded-md text-[13px] font-semibold tabular-nums ${
+                    y === viewYear
                       ? "bg-accent text-accent-ink"
-                      : isToday
+                      : y === today.getFullYear()
                         ? "border border-accent text-accent"
-                        : inMonth
-                          ? "text-ink hover:bg-surface-2"
-                          : "text-muted/50 hover:bg-surface-2"
+                        : "text-ink hover:bg-surface-2"
                   }`}
                 >
-                  {date.getDate()}
+                  {y}
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted mb-1">
+                {WEEKDAY_LABELS.map((w, i) => (
+                  <div key={`${w}-${i}`}>{w}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {cells.map(({ date, inMonth }, i) => {
+                  const isSelected = selectedDate && isSameDay(date, selectedDate);
+                  const isToday = isSameDay(date, today);
+                  return (
+                    <button
+                      type="button"
+                      key={i}
+                      onClick={() => selectDay(date)}
+                      className={`h-8 w-8 rounded-md text-xs font-semibold tabular-nums ${
+                        isSelected
+                          ? "bg-accent text-accent-ink"
+                          : isToday
+                            ? "border border-accent text-accent"
+                            : inMonth
+                              ? "text-ink hover:bg-surface-2"
+                              : "text-muted/50 hover:bg-surface-2"
+                      }`}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
