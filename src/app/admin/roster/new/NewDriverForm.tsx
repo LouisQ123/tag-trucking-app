@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { createDriver } from "@/lib/actions/roster";
 import type { ActionState } from "@/lib/actions/auth";
+import DateInput from "@/components/DateInput";
+import PhoneInput from "@/components/PhoneInput";
 
 const initialState: ActionState = {};
 
@@ -17,7 +19,7 @@ export default function NewDriverForm() {
             <input name="full_name" required className="input" />
           </Field>
           <Field label="Phone">
-            <input name="phone" type="tel" placeholder="(555) 555-5555" className="input" />
+            <PhoneInput name="phone" />
           </Field>
           <Field label="Hourly Pay ($)">
             <input name="hourly_pay" type="number" min={0} step={0.25} className="input" />
@@ -31,10 +33,10 @@ export default function NewDriverForm() {
             <input name="cdl_number" className="input" />
           </Field>
           <Field label="License Expiration">
-            <input name="license_expiration" type="date" className="input" />
+            <DateInput name="license_expiration" />
           </Field>
           <Field label="Medical Card Expiration">
-            <input name="medical_card_expiration" type="date" className="input" />
+            <DateInput name="medical_card_expiration" />
           </Field>
         </Grid>
       </Section>

@@ -6,6 +6,7 @@ import { createSheet, updateSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES, TRUCK_NUMBERS } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
+import DateInput from "@/components/DateInput";
 import type { ProductionSheet } from "@/lib/types/database";
 
 interface LoadRow {
@@ -171,14 +172,7 @@ export default function SheetEditor({
             />
           </Field>
           <Field label="Date">
-            <input
-              type="date"
-              name="date"
-              required
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="input"
-            />
+            <DateInput name="date" defaultValue={date} onChange={setDate} required />
           </Field>
           <Field label="Truck Number">
             <input

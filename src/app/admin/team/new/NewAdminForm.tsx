@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { createAdminUser } from "@/lib/actions/admins";
 import type { ActionState } from "@/lib/actions/auth";
+import PhoneInput from "@/components/PhoneInput";
 
 const initialState: ActionState = {};
 
@@ -22,7 +23,7 @@ export default function NewAdminForm() {
           <input name="password" type="text" required minLength={8} className="input" />
         </Field>
         <Field label="Phone" hint="Can sign in with this instead of email">
-          <input name="phone" type="tel" placeholder="(555) 555-5555" className="input" />
+          <PhoneInput name="phone" />
         </Field>
       </div>
 

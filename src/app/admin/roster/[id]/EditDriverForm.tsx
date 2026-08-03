@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { updateDriver, deleteDriver } from "@/lib/actions/roster";
 import type { ActionState } from "@/lib/actions/auth";
 import type { Driver } from "@/lib/types/database";
+import DateInput from "@/components/DateInput";
+import PhoneInput from "@/components/PhoneInput";
 
 const initialState: ActionState = {};
 
@@ -41,7 +43,7 @@ export default function EditDriverForm({ driver }: { driver: Driver }) {
             <input name="full_name" defaultValue={driver.full_name} required className="input" />
           </Field>
           <Field label="Phone">
-            <input name="phone" defaultValue={driver.phone ?? ""} type="tel" placeholder="(555) 555-5555" className="input" />
+            <PhoneInput name="phone" defaultValue={driver.phone ?? ""} />
           </Field>
           <Field label="Hourly Pay ($)">
             <input
@@ -62,20 +64,10 @@ export default function EditDriverForm({ driver }: { driver: Driver }) {
             <input name="cdl_number" defaultValue={driver.cdl_number ?? ""} className="input" />
           </Field>
           <Field label="License Expiration">
-            <input
-              name="license_expiration"
-              type="date"
-              defaultValue={driver.license_expiration ?? ""}
-              className="input"
-            />
+            <DateInput name="license_expiration" defaultValue={driver.license_expiration ?? ""} />
           </Field>
           <Field label="Medical Card Expiration">
-            <input
-              name="medical_card_expiration"
-              type="date"
-              defaultValue={driver.medical_card_expiration ?? ""}
-              className="input"
-            />
+            <DateInput name="medical_card_expiration" defaultValue={driver.medical_card_expiration ?? ""} />
           </Field>
         </Grid>
       </Section>

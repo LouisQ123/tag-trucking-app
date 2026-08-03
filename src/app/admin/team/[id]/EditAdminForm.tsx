@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { updateAdminUser } from "@/lib/actions/admins";
 import type { ActionState } from "@/lib/actions/auth";
 import type { Profile } from "@/lib/types/database";
+import PhoneInput from "@/components/PhoneInput";
 
 const initialState: ActionState = {};
 
@@ -39,7 +40,7 @@ export default function EditAdminForm({ profile }: { profile: Profile }) {
           <input name="email" type="email" defaultValue={profile.email ?? ""} required className="input" />
         </Field>
         <Field label="Phone" hint="Can sign in with this instead of email">
-          <input name="phone" defaultValue={profile.phone ?? ""} type="tel" placeholder="(555) 555-5555" className="input" />
+          <PhoneInput name="phone" defaultValue={profile.phone ?? ""} />
         </Field>
       </div>
 

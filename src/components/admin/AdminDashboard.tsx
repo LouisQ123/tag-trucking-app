@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ProductionSheet } from "@/lib/types/database";
 import BarList from "@/components/charts/BarList";
+import DateInput from "@/components/DateInput";
 import { softDeleteSheet, exportAllData } from "@/lib/actions/admin";
 
 const SERIES = { blue: "var(--series-blue)", green: "var(--series-green)", orange: "var(--accent)" };
@@ -210,20 +211,20 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
         </div>
         {range === "custom" && (
           <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5"
-              aria-label="From date"
+            <DateInput
+              name="custom_from"
+              defaultValue={customFrom}
+              onChange={setCustomFrom}
+              ariaLabel="From date"
+              className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5 flex items-center gap-2"
             />
             <span className="text-xs text-muted font-bold">to</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5"
-              aria-label="To date"
+            <DateInput
+              name="custom_to"
+              defaultValue={customTo}
+              onChange={setCustomTo}
+              ariaLabel="To date"
+              className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5 flex items-center gap-2"
             />
           </div>
         )}
