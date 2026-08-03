@@ -7,6 +7,7 @@ import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES, TRUCK_NUMBERS } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
 import DateInput from "@/components/DateInput";
+import ComboInput from "@/components/ComboInput";
 import type { ProductionSheet } from "@/lib/types/database";
 
 interface LoadRow {
@@ -126,31 +127,6 @@ export default function SheetEditor({
     <form action={formAction} className="flex flex-col gap-4">
       {sheet && <input type="hidden" name="id" value={sheet.id} />}
       <input type="hidden" name="loads" value={JSON.stringify(loads)} />
-      <datalist id="driver-names">
-        {driverNameSuggestions.map((n) => (
-          <option key={n} value={n} />
-        ))}
-      </datalist>
-      <datalist id="dumping-locations">
-        {DUMPING_LOCATIONS.map((loc) => (
-          <option key={loc} value={loc} />
-        ))}
-      </datalist>
-      <datalist id="material-types">
-        {MATERIAL_TYPES.map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
-      <datalist id="companies">
-        {COMPANIES.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-      <datalist id="truck-numbers">
-        {TRUCK_NUMBERS.map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
 
       {state.error && (
         <div className="rounded-lg bg-critical/10 border border-critical/30 text-sm font-semibold text-critical px-4 py-3">
@@ -161,28 +137,25 @@ export default function SheetEditor({
       <Card title="Sheet">
         <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
           <Field label="Driver">
-            <input
+            <ComboInput
               name="driver_name"
-              list="driver-names"
               required
               value={driverName}
-              onChange={(e) => onDriverChange(e.target.value)}
+              onChange={onDriverChange}
+              suggestions={driverNameSuggestions}
               placeholder="Type or pick a name"
-              className="input"
             />
           </Field>
           <Field label="Date">
             <DateInput name="date" defaultValue={date} onChange={setDate} required />
           </Field>
           <Field label="Truck Number">
-            <input
-              type="text"
+            <ComboInput
               name="truck_number"
-              list="truck-numbers"
               required
               value={truck}
-              onChange={(e) => setTruck(e.target.value)}
-              className="input"
+              onChange={setTruck}
+              suggestions={TRUCK_NUMBERS}
             />
           </Field>
         </div>
@@ -332,26 +305,26 @@ export default function SheetEditor({
                   value={row.jobSite}
                   onChange={(e) => updateLoad(row.key, "jobSite", e.target.value)}
                 />
-                <input
+                <ComboInput
                   className="input-sm"
                   placeholder="Dumping location"
-                  list="dumping-locations"
                   value={row.dumping}
-                  onChange={(e) => updateLoad(row.key, "dumping", e.target.value)}
+                  onChange={(v) => updateLoad(row.key, "dumping", v)}
+                  suggestions={DUMPING_LOCATIONS}
                 />
-                <input
+                <ComboInput
                   className="input-sm"
                   placeholder="Material type"
-                  list="material-types"
                   value={row.type}
-                  onChange={(e) => updateLoad(row.key, "type", e.target.value)}
+                  onChange={(v) => updateLoad(row.key, "type", v)}
+                  suggestions={MATERIAL_TYPES}
                 />
-                <input
+                <ComboInput
                   className="input-sm"
                   placeholder="Company"
-                  list="companies"
                   value={row.company}
-                  onChange={(e) => updateLoad(row.key, "company", e.target.value)}
+                  onChange={(v) => updateLoad(row.key, "company", v)}
+                  suggestions={COMPANIES}
                 />
               </div>
               <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2.5">
