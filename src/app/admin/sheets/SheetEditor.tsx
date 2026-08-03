@@ -44,9 +44,11 @@ const initialState: ActionState = {};
 export default function SheetEditor({
   sheet,
   driverNameSuggestions,
+  driverPayRates,
 }: {
   sheet?: ProductionSheet;
   driverNameSuggestions: string[];
+  driverPayRates: Record<string, number>;
 }) {
   const [state, formAction, pending] = useActionState(sheet ? updateSheet : createSheet, initialState);
 
@@ -54,6 +56,7 @@ export default function SheetEditor({
   const [date, setDate] = useState(sheet?.date ?? todayISO());
   const [truck, setTruck] = useState(sheet?.truck_number ?? "");
   const [hourlyPay, setHourlyPay] = useState(sheet?.hourly_pay !== null && sheet?.hourly_pay !== undefined ? String(sheet.hourly_pay) : "");
+  const [hourlyPayTouched, setHourlyPayTouched] = useState(false);
   const [startTime, setStartTime] = useState(sheet?.start_time ?? "");
   const [endTime, setEndTime] = useState(sheet?.end_time ?? "");
   const [hours, setHours] = useState(sheet?.hours !== null && sheet?.hours !== undefined ? String(sheet.hours) : "");
@@ -111,6 +114,13 @@ export default function SheetEditor({
     setLoads((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
   }
 
+  function onDriverChange(name: string) {
+    setDriverName(name);
+    if (!hourlyPayTouched && name in driverPayRates) {
+      setHourlyPay(String(driverPayRates[name]));
+    }
+  }
+
   return (
     <form action={formAction} className="flex flex-col gap-4">
       {sheet && <input type="hidden" name="id" value={sheet.id} />}
@@ -155,7 +165,7 @@ export default function SheetEditor({
               list="driver-names"
               required
               value={driverName}
-              onChange={(e) => setDriverName(e.target.value)}
+              onChange={(e) => onDriverChange(e.target.value)}
               placeholder="Type or pick a name"
               className="input"
             />
@@ -233,7 +243,10 @@ export default function SheetEditor({
               min={0}
               step={0.25}
               value={hourlyPay}
-              onChange={(e) => setHourlyPay(e.target.value)}
+              onChange={(e) => {
+                setHourlyPayTouched(true);
+                setHourlyPay(e.target.value);
+              }}
               placeholder="0.00"
               className="input"
             />

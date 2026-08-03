@@ -15,6 +15,17 @@ export interface Profile {
   created_at: string;
 }
 
+export interface Driver {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  hourly_pay: number | null;
+  cdl_number: string | null;
+  license_expiration: string | null;
+  medical_card_expiration: string | null;
+  created_at: string;
+}
+
 export interface Load {
   id: string;
   sheet_id: string;

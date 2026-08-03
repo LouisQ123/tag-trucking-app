@@ -109,7 +109,46 @@ create index if not exists production_sheets_driver_date_idx on public.productio
 create index if not exists production_sheets_deleted_idx on public.production_sheets (deleted_at);
 
 -- ============================================================
--- 3. LOADS — one or more rows per production sheet
+-- 3. DRIVERS ROSTER — contact & compliance info only, no login.
+--    Independent of production_sheets.driver_name (free text) so a
+--    typo'd or one-off name on a sheet never blocks saving it.
+-- ============================================================
+create table if not exists public.drivers (
+  id uuid primary key default gen_random_uuid(),
+  full_name text not null unique,
+  phone text,
+  hourly_pay numeric(8, 2) check (hourly_pay is null or hourly_pay >= 0),
+  cdl_number text,
+  license_expiration date,
+  medical_card_expiration date,
+  created_at timestamptz not null default now()
+);
+
+comment on column public.drivers.hourly_pay is 'Default rate, used to prefill a new sheet for this driver. Each sheet still stores its own hourly_pay so past payroll never changes if this is edited.';
+
+insert into public.drivers (full_name) values
+  ('Luis Villanueva'),
+  ('Edgar Humberto Lugo Almodovar'),
+  ('Ismael Angel Otero Mendoza'),
+  ('Alexis JR Gonzales'),
+  ('Roberto Luis Ortiz'),
+  ('Juan Angel De Jesus Peralta Garcia'),
+  ('Ismael Otero Nieves'),
+  ('Abdiel Quinones Rivera'),
+  ('Christopher Tyler Krings'),
+  ('Gabriel Mojica'),
+  ('Elias Centeno'),
+  ('William A McGoldrick'),
+  ('Mello Carmelo Ocasio'),
+  ('Jhonatan Diaz'),
+  ('Orlando Martinez Acevedo'),
+  ('John O Cirino'),
+  ('Joelvis Cruz Chico'),
+  ('William A Lopez-Valdes')
+on conflict (full_name) do nothing;
+
+-- ============================================================
+-- 4. LOADS — one or more rows per production sheet
 -- ============================================================
 create table if not exists public.loads (
   id uuid primary key default gen_random_uuid(),
@@ -152,7 +191,7 @@ alter table public.loads add column if not exists note text;
 create index if not exists loads_sheet_idx on public.loads (sheet_id);
 
 -- ============================================================
--- 4. HELPER: is_admin() — SECURITY DEFINER so it can read profiles
+-- 5. HELPER: is_admin() — SECURITY DEFINER so it can read profiles
 --    without recursively triggering the RLS policy on profiles itself.
 -- ============================================================
 create or replace function public.is_admin()
@@ -168,7 +207,7 @@ as $$
 $$;
 
 -- ============================================================
--- 5. TRIGGER: auto-create a profile row when a new auth user signs up
+-- 6. TRIGGER: auto-create a profile row when a new auth user signs up
 --    (used by the admin "add driver" flow, which sets user metadata).
 -- ============================================================
 create or replace function public.handle_new_auth_user()
@@ -202,7 +241,7 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_auth_user();
 
 -- ============================================================
--- 6. TRIGGER: only an admin may change role / pay / compliance / truck fields
+-- 7. TRIGGER: only an admin may change role / pay / compliance / truck fields
 --    on a profile. Defense in depth — enforced in the database, not just the UI.
 -- ============================================================
 create or replace function public.protect_profile_fields()
@@ -234,7 +273,7 @@ create trigger protect_profile_fields_trigger
   for each row execute function public.protect_profile_fields();
 
 -- ============================================================
--- 7. TRIGGER: snapshot labor_cost = hours * hourly_pay at the moment a
+-- 8. TRIGGER: snapshot labor_cost = hours * hourly_pay at the moment a
 --    sheet is inserted or its hours/rate are edited.
 -- ============================================================
 create or replace function public.set_labor_cost()
@@ -259,11 +298,12 @@ create trigger set_labor_cost_trigger
   for each row execute function public.set_labor_cost();
 
 -- ============================================================
--- 8. ROW LEVEL SECURITY
+-- 9. ROW LEVEL SECURITY
 -- ============================================================
 alter table public.profiles enable row level security;
 alter table public.production_sheets enable row level security;
 alter table public.loads enable row level security;
+alter table public.drivers enable row level security;
 
 -- profiles: admins see/edit everyone; drivers see/edit only themselves
 drop policy if exists profiles_select on public.profiles;
@@ -308,8 +348,25 @@ drop policy if exists loads_delete on public.loads;
 create policy loads_delete on public.loads
   for delete using (public.is_admin());
 
+-- drivers: admin-only. No login is tied to these rows — it's a roster.
+drop policy if exists drivers_select on public.drivers;
+create policy drivers_select on public.drivers
+  for select using (public.is_admin());
+
+drop policy if exists drivers_insert on public.drivers;
+create policy drivers_insert on public.drivers
+  for insert with check (public.is_admin());
+
+drop policy if exists drivers_update on public.drivers;
+create policy drivers_update on public.drivers
+  for update using (public.is_admin());
+
+drop policy if exists drivers_delete on public.drivers;
+create policy drivers_delete on public.drivers
+  for delete using (public.is_admin());
+
 -- ============================================================
--- 9. BOOTSTRAP THE FIRST ADMIN
+-- 10. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication
 --    -> Users -> Add user (check "Auto Confirm User"). This creates a
