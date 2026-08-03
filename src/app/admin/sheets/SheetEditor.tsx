@@ -4,7 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import { createSheet, updateSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
-import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES } from "@/lib/loadOptions";
+import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES, TRUCK_NUMBERS } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
 import type { ProductionSheet } from "@/lib/types/database";
 
@@ -135,6 +135,11 @@ export default function SheetEditor({
           <option key={c} value={c} />
         ))}
       </datalist>
+      <datalist id="truck-numbers">
+        {TRUCK_NUMBERS.map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
 
       {state.error && (
         <div className="rounded-lg bg-critical/10 border border-critical/30 text-sm font-semibold text-critical px-4 py-3">
@@ -169,6 +174,7 @@ export default function SheetEditor({
             <input
               type="text"
               name="truck_number"
+              list="truck-numbers"
               required
               value={truck}
               onChange={(e) => setTruck(e.target.value)}
