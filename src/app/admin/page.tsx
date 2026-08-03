@@ -6,7 +6,7 @@ export default async function AdminDashboardPage() {
   const supabase = await createClient();
   const { data: sheets } = await supabase
     .from("production_sheets")
-    .select("*, loads(*), profiles(full_name, truck_number)")
+    .select("*, loads(*)")
     .is("deleted_at", null)
     .order("date", { ascending: false });
 

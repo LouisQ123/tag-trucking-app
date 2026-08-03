@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { submitSheet } from "@/lib/actions/sheets";
+import { useActionState, useMemo, useState } from "react";
+import Link from "next/link";
+import { createSheet, updateSheet } from "@/lib/actions/sheets";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
+import type { ProductionSheet } from "@/lib/types/database";
 
 interface LoadRow {
   key: string;
@@ -15,27 +17,6 @@ interface LoadRow {
   jobSiteArrivalTime: string;
   jobSiteDepartureTime: string;
   note: string;
-}
-
-interface Draft {
-  date: string;
-  truck: string;
-  startTime: string;
-  endTime: string;
-  hours: string;
-  hoursTouched: boolean;
-  fuel: string;
-  startMiles: string;
-  endMiles: string;
-  remarks: string;
-  loads: LoadRow[];
-}
-
-function todayISO() {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
 }
 
 function newLoad(): LoadRow {
@@ -51,193 +32,50 @@ function newLoad(): LoadRow {
   };
 }
 
-function draftKey(driverId: string) {
-  return `atg-sheet-draft-${driverId}`;
-}
-
-// In-progress sheets are saved to this device (not the server) so a driver
-// filling this out across a shift — closing the app, losing signal, a
-// phone restart — doesn't lose their progress. Cleared once actually
-// submitted. Guarded for SSR, where localStorage doesn't exist.
-function loadDraft(driverId: string): Draft | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(draftKey(driverId));
-    return raw ? (JSON.parse(raw) as Draft) : null;
-  } catch {
-    return null;
-  }
-}
-function saveDraft(driverId: string, draft: Draft) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(draftKey(driverId), JSON.stringify(draft));
-  } catch {
-    // Storage full or disabled — the driver can still submit normally,
-    // they just won't get autosave.
-  }
-}
-function clearDraft(driverId: string) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(draftKey(driverId));
-  } catch {
-    // ignore
-  }
-}
-
-// A draft with nothing but default values (today's date, the driver's
-// default truck, no times, no loads filled in) isn't real progress —
-// don't persist it, and don't show the "restored" banner for it if an old
-// one is still sitting in storage.
-function isBlankDraft(draft: Draft, defaultTruck: string): boolean {
-  const rowBlank = (l: LoadRow) =>
-    !l.jobSite && !l.dumping && !l.type && !l.company && !l.jobSiteArrivalTime && !l.jobSiteDepartureTime && !l.note;
-  return (
-    (draft.truck || "") === defaultTruck &&
-    !draft.startTime &&
-    !draft.endTime &&
-    !draft.hours &&
-    !draft.fuel &&
-    !draft.startMiles &&
-    !draft.endMiles &&
-    !draft.remarks &&
-    draft.loads.every(rowBlank)
-  );
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
 const initialState: ActionState = {};
 
-export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: string; driverId: string }) {
-  const [state, formAction, pending] = useActionState(submitSheet, initialState);
-  const [dismissed, setDismissed] = useState(false);
-  const [savedDate, setSavedDate] = useState("");
+export default function SheetEditor({
+  sheet,
+  driverNameSuggestions,
+}: {
+  sheet?: ProductionSheet;
+  driverNameSuggestions: string[];
+}) {
+  const [state, formAction, pending] = useActionState(sheet ? updateSheet : createSheet, initialState);
 
-  const [date, setDate] = useState(todayISO());
-  const [truck, setTruck] = useState(defaultTruck);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [hours, setHours] = useState("");
+  const [driverName, setDriverName] = useState(sheet?.driver_name ?? "");
+  const [date, setDate] = useState(sheet?.date ?? todayISO());
+  const [truck, setTruck] = useState(sheet?.truck_number ?? "");
+  const [hourlyPay, setHourlyPay] = useState(sheet?.hourly_pay !== null && sheet?.hourly_pay !== undefined ? String(sheet.hourly_pay) : "");
+  const [startTime, setStartTime] = useState(sheet?.start_time ?? "");
+  const [endTime, setEndTime] = useState(sheet?.end_time ?? "");
+  const [hours, setHours] = useState(sheet?.hours !== null && sheet?.hours !== undefined ? String(sheet.hours) : "");
   const [hoursTouched, setHoursTouched] = useState(false);
-  const [fuel, setFuel] = useState("");
-  const [startMiles, setStartMiles] = useState("");
-  const [endMiles, setEndMiles] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [loads, setLoads] = useState<LoadRow[]>([newLoad(), newLoad()]);
-  // Start/End Time are uncontrolled (see TimeInput) so normal typing never
-  // remounts them. Bumping this key is the only way we force them back to
-  // blank — on "Clear", after a successful submit, or restoring a draft.
-  const [timeResetKey, setTimeResetKey] = useState(0);
-  const [draftRestored, setDraftRestored] = useState(false);
-  // Guards the autosave effect from firing (and overwriting a real draft
-  // with these blank initial values) before we've had a chance to restore.
-  // State, not a ref: the restore effect's setState calls for date/truck/etc
-  // don't apply until the next render, so if this were a ref, the autosave
-  // effect (running in that same initial commit) would still read the old
-  // blank closure values yet see the ref already flipped to true, and
-  // immediately overwrite the draft it just restored with those blanks.
-  const [hydrated, setHydrated] = useState(false);
-
-  function clearFields() {
-    setDate(todayISO());
-    setTruck(defaultTruck);
-    setStartTime("");
-    setEndTime("");
-    setHours("");
-    setHoursTouched(false);
-    setFuel("");
-    setStartMiles("");
-    setEndMiles("");
-    setRemarks("");
-    setLoads([newLoad(), newLoad()]);
-    setTimeResetKey((k) => k + 1);
-    setDraftRestored(false);
-    clearDraft(driverId);
-  }
-
-  // Restore any in-progress draft for this driver once, on mount. This is
-  // a legitimate use of an effect (unlike a plain "adjust state during
-  // render" case) — localStorage is an external system unavailable during
-  // render/SSR, so it can only be read here.
-  useEffect(() => {
-    const draft = loadDraft(driverId);
-    if (draft && !isBlankDraft(draft, defaultTruck)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDate(draft.date || todayISO());
-      setTruck(draft.truck || defaultTruck);
-      setStartTime(draft.startTime || "");
-      setEndTime(draft.endTime || "");
-      setHours(draft.hours || "");
-      setHoursTouched(!!draft.hoursTouched);
-      setFuel(draft.fuel || "");
-      setStartMiles(draft.startMiles || "");
-      setEndMiles(draft.endMiles || "");
-      setRemarks(draft.remarks || "");
-      setLoads(draft.loads?.length ? draft.loads : [newLoad(), newLoad()]);
-      setTimeResetKey((k) => k + 1);
-      setDraftRestored(true);
-    } else if (draft) {
-      // Stale empty draft from before this fix — clear it so it doesn't
-      // keep tripping the restored banner on future visits.
-      clearDraft(driverId);
-    }
-    setHydrated(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Autosave the in-progress sheet to this device on every change. A draft
-  // that's still just the defaults isn't worth persisting — it would only
-  // trip the "restored" banner on the next visit for no reason.
-  useEffect(() => {
-    if (!hydrated) return;
-    const draft: Draft = {
-      date,
-      truck,
-      startTime,
-      endTime,
-      hours,
-      hoursTouched,
-      fuel,
-      startMiles,
-      endMiles,
-      remarks,
-      loads,
-    };
-    if (isBlankDraft(draft, defaultTruck)) {
-      clearDraft(driverId);
-    } else {
-      saveDraft(driverId, draft);
-    }
-  }, [
-    hydrated,
-    driverId,
-    defaultTruck,
-    date,
-    truck,
-    startTime,
-    endTime,
-    hours,
-    hoursTouched,
-    fuel,
-    startMiles,
-    endMiles,
-    remarks,
-    loads,
-  ]);
-
-  // After a successful submit, clear the form for the next entry and
-  // surface a dismissible confirmation banner. Adjusted during render
-  // (React's recommended pattern) rather than in an effect, since this
-  // reacts to `state` — a value already produced by this render.
-  const [lastHandledState, setLastHandledState] = useState(state);
-  if (state !== lastHandledState) {
-    setLastHandledState(state);
-    if (!state.error) {
-      setSavedDate(date);
-      clearFields();
-      setDismissed(false);
-    }
-  }
+  const [fuel, setFuel] = useState(sheet?.fuel_gallons !== null && sheet?.fuel_gallons !== undefined ? String(sheet.fuel_gallons) : "");
+  const [startMiles, setStartMiles] = useState(sheet?.start_miles !== null && sheet?.start_miles !== undefined ? String(sheet.start_miles) : "");
+  const [endMiles, setEndMiles] = useState(sheet?.end_miles !== null && sheet?.end_miles !== undefined ? String(sheet.end_miles) : "");
+  const [remarks, setRemarks] = useState(sheet?.remarks ?? "");
+  const [loads, setLoads] = useState<LoadRow[]>(
+    sheet?.loads?.length
+      ? sheet.loads.map((l) => ({
+          key: l.id,
+          jobSite: l.job_site ?? "",
+          dumping: l.dumping ?? "",
+          type: l.type ?? "",
+          company: l.company ?? "",
+          jobSiteArrivalTime: l.job_site_arrival_time ?? "",
+          jobSiteDepartureTime: l.job_site_departure_time ?? "",
+          note: l.note ?? "",
+        }))
+      : [newLoad()]
+  );
 
   function onStartEnd(nextStart: string, nextEnd: string) {
     if (!hoursTouched && nextStart && nextEnd) {
@@ -262,15 +100,26 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
     return Math.round((totalMiles / f) * 10) / 10;
   }, [totalMiles, fuel]);
 
+  const laborCost = useMemo(() => {
+    const h = Number(hours),
+      r = Number(hourlyPay);
+    if (!hours || !hourlyPay || r <= 0) return null;
+    return Math.round(h * r * 100) / 100;
+  }, [hours, hourlyPay]);
+
   function updateLoad(key: string, field: keyof LoadRow, value: string) {
     setLoads((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
   }
 
-  const succeeded = !pending && !state.error && state !== initialState && !dismissed;
-
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {sheet && <input type="hidden" name="id" value={sheet.id} />}
       <input type="hidden" name="loads" value={JSON.stringify(loads)} />
+      <datalist id="driver-names">
+        {driverNameSuggestions.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <datalist id="dumping-locations">
         {DUMPING_LOCATIONS.map((loc) => (
           <option key={loc} value={loc} />
@@ -287,30 +136,25 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
         ))}
       </datalist>
 
-      {draftRestored && !succeeded && (
-        <div className="rounded-lg bg-accent-dim border border-accent/30 text-sm font-semibold px-4 py-3 flex items-center justify-between gap-3">
-          <span>Restored your in-progress sheet from earlier this shift.</span>
-          <button type="button" onClick={() => setDraftRestored(false)} className="text-xs underline font-bold">
-            Dismiss
-          </button>
-        </div>
-      )}
-      {succeeded && (
-        <div className="rounded-lg bg-good/10 border border-good/30 text-sm font-semibold px-4 py-3 flex items-center justify-between gap-3">
-          <span>Sheet saved for {savedDate}.</span>
-          <button type="button" onClick={() => setDismissed(true)} className="text-xs underline font-bold">
-            Dismiss
-          </button>
-        </div>
-      )}
       {state.error && (
         <div className="rounded-lg bg-critical/10 border border-critical/30 text-sm font-semibold text-critical px-4 py-3">
           {state.error}
         </div>
       )}
 
-      <Card title="Shift">
+      <Card title="Sheet">
         <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
+          <Field label="Driver">
+            <input
+              name="driver_name"
+              list="driver-names"
+              required
+              value={driverName}
+              onChange={(e) => setDriverName(e.target.value)}
+              placeholder="Type or pick a name"
+              className="input"
+            />
+          </Field>
           <Field label="Date">
             <input
               type="date"
@@ -328,8 +172,32 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
               required
               value={truck}
               onChange={(e) => setTruck(e.target.value)}
-              placeholder="e.g. 14"
               className="input"
+            />
+          </Field>
+        </div>
+      </Card>
+
+      <Card title="Shift">
+        <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
+          <Field label="Start Time">
+            <TimeInput
+              name="start_time"
+              defaultValue={startTime}
+              onChange={(v) => {
+                setStartTime(v);
+                onStartEnd(v, endTime);
+              }}
+            />
+          </Field>
+          <Field label="End Time">
+            <TimeInput
+              name="end_time"
+              defaultValue={endTime}
+              onChange={(v) => {
+                setEndTime(v);
+                onStartEnd(startTime, v);
+              }}
             />
           </Field>
           <Field label="Total Hours" hint="Fills in from start/end time">
@@ -347,27 +215,27 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
               className="input"
             />
           </Field>
-          <Field label="Start Time">
-            <TimeInput
-              key={`start-${timeResetKey}`}
-              name="start_time"
-              defaultValue={startTime}
-              onChange={(v) => {
-                setStartTime(v);
-                onStartEnd(v, endTime);
-              }}
+        </div>
+      </Card>
+
+      <Card title="Pay">
+        <div className="grid grid-cols-2 gap-3.5">
+          <Field label="Hourly Pay ($)">
+            <input
+              type="number"
+              name="hourly_pay"
+              min={0}
+              step={0.25}
+              value={hourlyPay}
+              onChange={(e) => setHourlyPay(e.target.value)}
+              placeholder="0.00"
+              className="input"
             />
           </Field>
-          <Field label="End Time">
-            <TimeInput
-              key={`end-${timeResetKey}`}
-              name="end_time"
-              defaultValue={endTime}
-              onChange={(v) => {
-                setEndTime(v);
-                onStartEnd(startTime, v);
-              }}
-            />
+          <Field label="Labor Cost">
+            <div className="font-bold text-accent text-[15px] py-2 tabular-nums">
+              {laborCost !== null ? `$${laborCost.toLocaleString()}` : "—"}
+            </div>
           </Field>
         </div>
       </Card>
@@ -526,22 +394,18 @@ export default function SheetForm({ defaultTruck, driverId }: { defaultTruck: st
       </Card>
 
       <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            clearFields();
-            setDismissed(true);
-          }}
-          className="rounded-lg border border-border text-ink-2 font-bold text-sm px-5 py-2.5"
+        <Link
+          href="/admin"
+          className="rounded-lg border border-border text-ink-2 font-bold text-sm px-5 py-2.5 flex items-center"
         >
-          Clear
-        </button>
+          Cancel
+        </Link>
         <button
           type="submit"
           disabled={pending}
           className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
         >
-          {pending ? "Saving…" : "Submit Sheet"}
+          {pending ? "Saving…" : sheet ? "Save Changes" : "Create Sheet"}
         </button>
       </div>
     </form>

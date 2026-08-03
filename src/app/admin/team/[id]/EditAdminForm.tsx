@@ -1,0 +1,87 @@
+"use client";
+
+import { useActionState, useEffect, useRef, useState } from "react";
+import { updateAdminUser } from "@/lib/actions/admins";
+import type { ActionState } from "@/lib/actions/auth";
+import type { Profile } from "@/lib/types/database";
+
+const initialState: ActionState = {};
+
+export default function EditAdminForm({ profile }: { profile: Profile }) {
+  const [state, formAction, pending] = useActionState(updateAdminUser, initialState);
+
+  // Turn the confirmation on during render (reacting to `state`, already
+  // produced by this render) — turn it off later via a timer effect.
+  const [lastHandledState, setLastHandledState] = useState(state);
+  const [saved, setSaved] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  if (state !== lastHandledState) {
+    setLastHandledState(state);
+    if (!state.error) setSaved(true);
+  }
+
+  useEffect(() => {
+    if (!saved) return;
+    if (passwordRef.current) passwordRef.current.value = "";
+    const t = setTimeout(() => setSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
+
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="id" value={profile.id} />
+
+      <div className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-3.5">
+        <Field label="Full Name">
+          <input name="full_name" defaultValue={profile.full_name} required className="input" />
+        </Field>
+        <Field label="Email" hint="Used to sign in — changing this updates their login">
+          <input name="email" type="email" defaultValue={profile.email ?? ""} required className="input" />
+        </Field>
+        <Field label="Phone" hint="Can sign in with this instead of email">
+          <input name="phone" defaultValue={profile.phone ?? ""} type="tel" placeholder="(555) 555-5555" className="input" />
+        </Field>
+      </div>
+
+      <div className="bg-surface border border-border rounded-xl p-5">
+        <Field label="Reset Password" hint="Leave blank to keep their current password. Share the new one with them directly.">
+          <input
+            ref={passwordRef}
+            name="new_password"
+            type="text"
+            minLength={8}
+            placeholder="Leave blank to keep current password"
+            className="input"
+          />
+        </Field>
+      </div>
+
+      {state.error && (
+        <div className="rounded-lg bg-critical/10 border border-critical/30 text-sm font-semibold text-critical px-4 py-3">
+          {state.error}
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 justify-end">
+        {saved && <span className="text-sm font-semibold text-good">Saved.</span>}
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
+        >
+          {pending ? "Saving…" : "Save Changes"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">{label}</label>
+      {children}
+      {hint && <span className="text-[11px] text-muted">{hint}</span>}
+    </div>
+  );
+}

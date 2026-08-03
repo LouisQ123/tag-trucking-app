@@ -1,8 +1,7 @@
-import type { Profile } from "@/lib/types/database";
 import SignOutButton from "./SignOutButton";
 import NavLinks from "./NavLinks";
 
-export default function TopBar({ profile }: { profile: Profile }) {
+export default function TopBar() {
   return (
     <div className="w-full">
       <div className="bg-surface border-b border-border">
@@ -14,9 +13,7 @@ export default function TopBar({ profile }: { profile: Profile }) {
               </div>
               <div className="leading-tight">
                 <p className="font-extrabold text-[15px]">ATG Trucking LLC</p>
-                <p className="text-[11px] font-semibold tracking-widest uppercase text-muted">
-                  {profile.role === "admin" ? "Admin" : "Driver Production"}
-                </p>
+                <p className="text-[11px] font-semibold tracking-widest uppercase text-muted">Admin</p>
               </div>
             </div>
             <div className="sm:hidden">
@@ -25,7 +22,7 @@ export default function TopBar({ profile }: { profile: Profile }) {
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <NavLinks role={profile.role} />
+            <NavLinks />
             <div className="hidden sm:block">
               <SignOutButton />
             </div>

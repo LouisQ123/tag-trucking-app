@@ -28,10 +28,10 @@ comment on column public.profiles.hourly_pay is 'Admin-only field. Used to compu
 -- ============================================================
 create table if not exists public.production_sheets (
   id uuid primary key default gen_random_uuid(),
-  -- restrict, not cascade: a driver's account can never be deleted out from
-  -- under their payroll/production history. Use profiles.active = false to
-  -- deactivate a driver instead — their historical sheets stay intact.
-  driver_id uuid not null references public.profiles (id) on delete restrict,
+  -- Drivers no longer have accounts — sheets are entered entirely by an
+  -- admin, who types (or picks from a suggestion list) whoever drove.
+  driver_name text not null,
+  hourly_pay numeric(8, 2) check (hourly_pay is null or hourly_pay >= 0),
   date date not null,
   truck_number text,
   start_time time,
@@ -65,10 +65,47 @@ create table if not exists public.production_sheets (
   constraint miles_order check (start_miles is null or end_miles is null or end_miles >= start_miles)
 );
 
-comment on column public.production_sheets.labor_cost is 'Snapshot of hours * driver hourly_pay at submission time, kept via trigger so later pay-rate changes do not rewrite payroll history.';
+comment on column public.production_sheets.labor_cost is 'Snapshot of hours * hourly_pay at submission time, kept via trigger so later edits to hourly_pay elsewhere do not rewrite payroll history.';
 comment on column public.production_sheets.deleted_at is 'Soft delete marker. NULL = active/visible. Set (not row-deleted) when an admin removes a sheet from the dashboard, so it can be restored from Trash.';
 
-create index if not exists production_sheets_driver_date_idx on public.production_sheets (driver_id, date desc);
+-- Migration: driver accounts were retired — sheets used to link to a
+-- login-capable profiles row (driver_id) and looked up its hourly_pay to
+-- compute payroll. Now an admin just types the driver's name and rate
+-- directly on the sheet, no account required. Safe to re-run: only acts if
+-- the old driver_id column is still there.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'production_sheets' and column_name = 'driver_id'
+  ) then
+    -- These policies reference driver_id and would block dropping the
+    -- column; the RLS section below recreates all of them without it.
+    drop policy if exists sheets_select on public.production_sheets;
+    drop policy if exists sheets_insert on public.production_sheets;
+    drop policy if exists loads_select on public.loads;
+    drop policy if exists loads_insert on public.loads;
+
+    drop trigger if exists set_labor_cost_trigger on public.production_sheets;
+    drop index if exists production_sheets_driver_date_idx;
+
+    alter table public.production_sheets add column if not exists driver_name text;
+    alter table public.production_sheets add column if not exists hourly_pay numeric(8, 2) check (hourly_pay is null or hourly_pay >= 0);
+
+    update public.production_sheets s
+    set driver_name = coalesce(p.full_name, 'Unknown'),
+        hourly_pay = p.hourly_pay
+    from public.profiles p
+    where s.driver_id = p.id and s.driver_name is null;
+
+    update public.production_sheets set driver_name = 'Unknown' where driver_name is null;
+
+    alter table public.production_sheets alter column driver_name set not null;
+    alter table public.production_sheets drop column driver_id;
+  end if;
+end $$;
+
+create index if not exists production_sheets_driver_date_idx on public.production_sheets (driver_name, date desc);
 create index if not exists production_sheets_deleted_idx on public.production_sheets (deleted_at);
 
 -- ============================================================
@@ -197,8 +234,8 @@ create trigger protect_profile_fields_trigger
   for each row execute function public.protect_profile_fields();
 
 -- ============================================================
--- 7. TRIGGER: snapshot labor_cost = hours * driver's current hourly_pay
---    at the moment a sheet is inserted or its hours are edited.
+-- 7. TRIGGER: snapshot labor_cost = hours * hourly_pay at the moment a
+--    sheet is inserted or its hours/rate are edited.
 -- ============================================================
 create or replace function public.set_labor_cost()
 returns trigger
@@ -206,12 +243,9 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  rate numeric(8, 2);
 begin
-  select hourly_pay into rate from public.profiles where id = new.driver_id;
-  if new.hours is not null and rate is not null then
-    new.labor_cost := round(new.hours * rate, 2);
+  if new.hours is not null and new.hourly_pay is not null then
+    new.labor_cost := round(new.hours * new.hourly_pay, 2);
   else
     new.labor_cost := null;
   end if;
@@ -221,7 +255,7 @@ $$;
 
 drop trigger if exists set_labor_cost_trigger on public.production_sheets;
 create trigger set_labor_cost_trigger
-  before insert or update of hours, driver_id on public.production_sheets
+  before insert or update of hours, hourly_pay on public.production_sheets
   for each row execute function public.set_labor_cost();
 
 -- ============================================================
@@ -240,14 +274,15 @@ drop policy if exists profiles_update on public.profiles;
 create policy profiles_update on public.profiles
   for update using (public.is_admin() or id = auth.uid());
 
--- production_sheets: admins see/manage everyone's; drivers see/insert only their own
+-- production_sheets & loads: admin-only. Drivers no longer have accounts —
+-- every sheet is entered and managed by an admin.
 drop policy if exists sheets_select on public.production_sheets;
 create policy sheets_select on public.production_sheets
-  for select using (public.is_admin() or driver_id = auth.uid());
+  for select using (public.is_admin());
 
 drop policy if exists sheets_insert on public.production_sheets;
 create policy sheets_insert on public.production_sheets
-  for insert with check (public.is_admin() or driver_id = auth.uid());
+  for insert with check (public.is_admin());
 
 drop policy if exists sheets_update on public.production_sheets;
 create policy sheets_update on public.production_sheets
@@ -257,24 +292,13 @@ drop policy if exists sheets_delete on public.production_sheets;
 create policy sheets_delete on public.production_sheets
   for delete using (public.is_admin());
 
--- loads: follow the parent sheet's ownership
 drop policy if exists loads_select on public.loads;
 create policy loads_select on public.loads
-  for select using (
-    public.is_admin() or exists (
-      select 1 from public.production_sheets s
-      where s.id = loads.sheet_id and s.driver_id = auth.uid()
-    )
-  );
+  for select using (public.is_admin());
 
 drop policy if exists loads_insert on public.loads;
 create policy loads_insert on public.loads
-  for insert with check (
-    public.is_admin() or exists (
-      select 1 from public.production_sheets s
-      where s.id = loads.sheet_id and s.driver_id = auth.uid()
-    )
-  );
+  for insert with check (public.is_admin());
 
 drop policy if exists loads_update on public.loads;
 create policy loads_update on public.loads

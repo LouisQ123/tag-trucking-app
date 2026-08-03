@@ -7,7 +7,7 @@ export default async function AccountPage() {
 
   return (
     <>
-      <TopBar profile={profile} />
+      <TopBar />
       <main className="max-w-md mx-auto px-5 py-10 flex flex-col gap-6">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight">Account</h1>
@@ -21,25 +21,8 @@ export default async function AccountPage() {
           <Row label="Name" value={profile.full_name} />
           <Row label="Email" value={profile.email ?? "—"} />
           <Row label="Phone" value={profile.phone ?? "—"} />
-          <Row label="Truck" value={profile.truck_number ?? "—"} />
-          {profile.role === "driver" && (
-            <>
-              <Row
-                label="CDL Number"
-                value={profile.cdl_number ?? "—"}
-              />
-              <Row
-                label="License Expires"
-                value={profile.license_expiration ?? "—"}
-              />
-              <Row
-                label="Medical Card Expires"
-                value={profile.medical_card_expiration ?? "—"}
-              />
-            </>
-          )}
           <p className="text-xs text-muted pt-1">
-            To update these details, contact your dispatcher.
+            To update these details, ask another admin to edit your account under Team.
           </p>
         </div>
 

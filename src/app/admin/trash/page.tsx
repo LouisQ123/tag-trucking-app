@@ -6,7 +6,7 @@ export default async function TrashPage() {
   const supabase = await createClient();
   const { data: sheets } = await supabase
     .from("production_sheets")
-    .select("*, loads(*), profiles(full_name, truck_number)")
+    .select("*, loads(*)")
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false });
 

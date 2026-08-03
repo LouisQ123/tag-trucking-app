@@ -11,24 +11,13 @@ import type { ActionState } from "@/lib/actions/auth";
 function str(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
-function numOrNull(formData: FormData, key: string) {
-  const v = str(formData, key);
-  if (!v) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-function dateOrNull(formData: FormData, key: string) {
-  const v = str(formData, key);
-  return v || null;
-}
 
-export async function createDriver(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function createAdminUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
 
   const email = str(formData, "email");
   const password = str(formData, "password");
   const fullName = str(formData, "full_name");
-  const role = str(formData, "role") === "admin" ? "admin" : "driver";
   const phoneRaw = str(formData, "phone");
 
   if (!email || !fullName) return { error: "Name and email are required." };
@@ -48,12 +37,7 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
     email_confirm: true,
     user_metadata: {
       full_name: fullName,
-      role,
-      truck_number: str(formData, "truck_number") || null,
-      hourly_pay: str(formData, "hourly_pay") || null,
-      cdl_number: str(formData, "cdl_number") || null,
-      license_expiration: dateOrNull(formData, "license_expiration"),
-      medical_card_expiration: dateOrNull(formData, "medical_card_expiration"),
+      role: "admin",
       phone: phoneRaw || null,
     },
   });
@@ -62,27 +46,23 @@ export async function createDriver(_prev: ActionState, formData: FormData): Prom
     return { error: error?.message || "Couldn't create the account." };
   }
 
-  revalidatePath("/admin/drivers");
-  redirect("/admin/drivers");
+  revalidatePath("/admin/team");
+  redirect("/admin/team");
 }
 
-export async function updateDriver(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function updateAdminUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
   const id = str(formData, "id");
-  if (!id) return { error: "Missing driver id." };
+  if (!id) return { error: "Missing user id." };
 
   const email = str(formData, "email");
   const newPassword = str(formData, "new_password");
-  const role = str(formData, "role") === "admin" ? "admin" : "driver";
   const phoneRaw = str(formData, "phone");
   if (!email) return { error: "Email is required." };
   if (newPassword && newPassword.length < 8) {
     return { error: "New password must be at least 8 characters." };
   }
 
-  // Phone sign-in is handled at the app level (phone -> email lookup), not
-  // via Supabase's native phone auth — that requires a paid SMS provider we
-  // don't need since we never send an OTP. Just validate the format here.
   if (phoneRaw && !toE164(phoneRaw)) {
     return { error: "Phone number must be a valid 10-digit US number." };
   }
@@ -106,19 +86,12 @@ export async function updateDriver(_prev: ActionState, formData: FormData): Prom
       full_name: str(formData, "full_name"),
       email,
       phone: phoneRaw || null,
-      truck_number: str(formData, "truck_number") || null,
-      hourly_pay: numOrNull(formData, "hourly_pay"),
-      cdl_number: str(formData, "cdl_number") || null,
-      license_expiration: dateOrNull(formData, "license_expiration"),
-      medical_card_expiration: dateOrNull(formData, "medical_card_expiration"),
-      role,
-      active: formData.get("active") === "on",
     })
     .eq("id", id);
 
   if (error) return { error: error.message };
 
-  revalidatePath("/admin/drivers");
-  revalidatePath(`/admin/drivers/${id}`);
+  revalidatePath("/admin/team");
+  revalidatePath(`/admin/team/${id}`);
   return {};
 }

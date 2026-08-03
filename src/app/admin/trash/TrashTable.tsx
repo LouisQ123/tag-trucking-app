@@ -46,7 +46,7 @@ export default function TrashTable({ sheets }: { sheets: ProductionSheet[] }) {
             {sheets.map((s) => (
               <tr key={s.id} className="border-t border-grid tabular-nums">
                 <td className="px-4 py-3">{s.date}</td>
-                <td className="px-4 py-3 font-semibold">{s.profiles?.full_name ?? "—"}</td>
+                <td className="px-4 py-3 font-semibold">{s.driver_name}</td>
                 <td className="px-4 py-3">{s.truck_number}</td>
                 <td className="px-4 py-3">{s.loads?.length ?? 0}</td>
                 <td className="px-4 py-3">

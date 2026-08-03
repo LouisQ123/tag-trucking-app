@@ -50,8 +50,7 @@ export default function LoginForm({ next }: { next: string }) {
         {pending ? "Signing in…" : "Sign In"}
       </button>
       <p className="text-xs text-muted text-center leading-relaxed">
-        New driver accounts are created by your dispatcher. Contact them if you
-        don&apos;t have a login yet.
+        Contact another admin if you don&apos;t have a login yet.
       </p>
     </form>
   );

@@ -51,20 +51,14 @@ function parseLoads(formData: FormData): LoadInput[] {
     );
 }
 
-export async function submitSheet(
-  _prev: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Your session expired — please sign in again." };
+export async function createSheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
 
+  const driverName = String(formData.get("driver_name") || "").trim();
   const date = String(formData.get("date") || "");
   const truckNumber = String(formData.get("truck_number") || "").trim();
-  if (!date || !truckNumber) {
-    return { error: "Date and truck number are required." };
+  if (!driverName || !date || !truckNumber) {
+    return { error: "Driver, date, and truck number are required." };
   }
 
   const startMiles = toNumberOrNull(formData.get("start_miles"));
@@ -74,11 +68,13 @@ export async function submitSheet(
   }
 
   const cleanLoads = parseLoads(formData);
+  const supabase = await createClient();
 
   const { data: sheet, error: sheetError } = await supabase
     .from("production_sheets")
     .insert({
-      driver_id: user.id,
+      driver_name: driverName,
+      hourly_pay: toNumberOrNull(formData.get("hourly_pay")),
       date,
       truck_number: truckNumber,
       start_time: String(formData.get("start_time") || "") || null,
@@ -109,23 +105,21 @@ export async function submitSheet(
         note: l.note || null,
       }))
     );
-    if (loadsError) {
-      return { error: loadsError.message };
-    }
+    if (loadsError) return { error: loadsError.message };
   }
 
-  revalidatePath("/");
-  return {};
+  revalidatePath("/admin");
+  redirect("/admin");
 }
 
 export async function updateSheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
 
   const id = String(formData.get("id") || "");
-  const driverId = String(formData.get("driver_id") || "");
+  const driverName = String(formData.get("driver_name") || "").trim();
   const date = String(formData.get("date") || "");
   const truckNumber = String(formData.get("truck_number") || "").trim();
-  if (!id || !driverId || !date || !truckNumber) {
+  if (!id || !driverName || !date || !truckNumber) {
     return { error: "Driver, date, and truck number are required." };
   }
 
@@ -141,7 +135,8 @@ export async function updateSheet(_prev: ActionState, formData: FormData): Promi
   const { error: sheetError } = await supabase
     .from("production_sheets")
     .update({
-      driver_id: driverId,
+      driver_name: driverName,
+      hourly_pay: toNumberOrNull(formData.get("hourly_pay")),
       date,
       truck_number: truckNumber,
       start_time: String(formData.get("start_time") || "") || null,

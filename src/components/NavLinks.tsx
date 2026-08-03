@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Role } from "@/lib/types/database";
 
-export default function NavLinks({ role }: { role: Role }) {
+export default function NavLinks() {
   const pathname = usePathname();
-  const links =
-    role === "admin"
-      ? [
-          { href: "/admin", label: "Dashboard" },
-          { href: "/admin/drivers", label: "Drivers" },
-        ]
-      : [{ href: "/", label: "New Sheet" }];
-  links.push({ href: "/account", label: "Account" });
+  const links = [
+    { href: "/admin", label: "Dashboard" },
+    { href: "/admin/team", label: "Team" },
+    { href: "/account", label: "Account" },
+  ];
 
   return (
     <nav className="flex items-center gap-1 bg-surface-2 rounded-lg p-1">

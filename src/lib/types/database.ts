@@ -29,7 +29,8 @@ export interface Load {
 
 export interface ProductionSheet {
   id: string;
-  driver_id: string;
+  driver_name: string;
+  hourly_pay: number | null;
   date: string;
   truck_number: string | null;
   start_time: string | null;
@@ -45,5 +46,4 @@ export interface ProductionSheet {
   submitted_at: string;
   deleted_at?: string | null;
   loads?: Load[];
-  profiles?: Pick<Profile, "full_name" | "truck_number">;
 }

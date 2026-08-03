@@ -81,7 +81,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const [companyFilter, setCompanyFilter] = useState("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const drivers = useMemo(() => uniqSorted(sheets.map((s) => s.profiles?.full_name)), [sheets]);
+  const drivers = useMemo(() => uniqSorted(sheets.map((s) => s.driver_name)), [sheets]);
   const companies = useMemo(
     () => uniqSorted(sheets.flatMap((s) => (s.loads ?? []).map((l) => l.company))),
     [sheets]
@@ -90,7 +90,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const filtered = useMemo(() => {
     return sheets.filter((s) => {
       if (!inRange(s.date, range, customFrom, customTo)) return false;
-      if (driverFilter !== "all" && s.profiles?.full_name !== driverFilter) return false;
+      if (driverFilter !== "all" && s.driver_name !== driverFilter) return false;
       if (companyFilter !== "all") {
         const hasCo = (s.loads ?? []).some((l) => l.company === companyFilter);
         if (!hasCo) return false;
@@ -134,7 +134,13 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
     return (
       <div className="text-center py-16 px-5 border border-dashed border-border rounded-xl text-ink-2">
         <h2 className="text-base font-extrabold text-ink mb-1.5">No production sheets yet</h2>
-        <p className="text-sm">Once drivers submit sheets, totals and charts will show up here.</p>
+        <p className="text-sm mb-4">Once you log a sheet, totals and charts will show up here.</p>
+        <Link
+          href="/admin/sheets/new"
+          className="inline-block rounded-lg bg-accent text-accent-ink font-bold text-sm px-5 py-2.5"
+        >
+          + New Sheet
+        </Link>
       </div>
     );
   }
@@ -145,7 +151,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   const totalFuel = filtered.reduce((a, s) => a + (s.fuel_gallons ?? 0), 0);
   const totalLaborCost = filtered.reduce((a, s) => a + (s.labor_cost ?? 0), 0);
   const avgMpg = totalFuel > 0 ? totalMiles / totalFuel : null;
-  const activeDrivers = new Set(filtered.map((s) => s.profiles?.full_name).filter(Boolean)).size;
+  const driversLogged = new Set(filtered.map((s) => s.driver_name).filter(Boolean)).size;
 
   let totalJobSiteMin = 0,
     jobSiteLoadsTimed = 0;
@@ -160,7 +166,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
   }
   const avgJobSiteMin = jobSiteLoadsTimed > 0 ? totalJobSiteMin / jobSiteLoadsTimed : null;
 
-  const byDriverLoads = aggregate(filtered, (s) => s.profiles?.full_name, (s) => s.loads?.length ?? 0);
+  const byDriverLoads = aggregate(filtered, (s) => s.driver_name, (s) => s.loads?.length ?? 0);
   const byTruckMiles = aggregate(filtered, (s) => s.truck_number, (s) => s.total_miles ?? 0);
   const byCompanyLoads = aggregateLoads(filtered, (l) => l.company);
   const byJobSiteTime = aggregateJobSiteTime(filtered);
@@ -169,9 +175,17 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-extrabold tracking-tight">Fleet Dashboard</h1>
-        <p className="text-sm text-ink-2 mt-0.5">Production, mileage, and payroll across the fleet.</p>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-extrabold tracking-tight">Fleet Dashboard</h1>
+          <p className="text-sm text-ink-2 mt-0.5">Production, mileage, and payroll across the fleet.</p>
+        </div>
+        <Link
+          href="/admin/sheets/new"
+          className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-4 py-2.5"
+        >
+          + New Sheet
+        </Link>
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5 bg-surface border border-border rounded-xl px-3.5 py-3">
@@ -265,7 +279,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
               unit={avgJobSiteMin !== null ? "hrs" : ""}
               sub={jobSiteLoadsTimed > 0 ? `${jobSiteLoadsTimed} loads timed` : undefined}
             />
-            <Kpi label="Active Drivers" value={activeDrivers.toLocaleString()} />
+            <Kpi label="Drivers Logged" value={driversLogged.toLocaleString()} />
             <Kpi label="Labor Cost" value={currency(totalLaborCost)} accent />
           </div>
 
@@ -288,7 +302,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
           <div className="bg-surface border border-border rounded-xl p-4.5">
             <p className="text-[13px] font-extrabold mb-0.5">Payroll</p>
             <p className="text-[11.5px] text-muted mb-3.5">
-              Hours logged &times; each driver&apos;s pay rate at the time of submission.
+              Hours logged &times; the pay rate entered on each sheet.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[480px]">
@@ -403,7 +417,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                     .map((s) => (
                       <tr key={s.id} className="border-t border-grid tabular-nums">
                         <td className="py-2 pr-3">{fmtDate(s.date)}</td>
-                        <td className="py-2 pr-3 font-semibold">{s.profiles?.full_name ?? "—"}</td>
+                        <td className="py-2 pr-3 font-semibold">{s.driver_name}</td>
                         <td className="py-2 pr-3">{s.truck_number}</td>
                         <td className="py-2 pr-3">{s.loads?.length ?? 0}</td>
                         <td className="py-2 pr-3">{s.total_miles ?? "—"}</td>
@@ -533,7 +547,7 @@ function groupLoadsByDate(sheets: ProductionSheet[]) {
       const arr = map.get(s.date) ?? [];
       arr.push({
         id: l.id,
-        driver: s.profiles?.full_name ?? "—",
+        driver: s.driver_name,
         truck: s.truck_number ?? "—",
         jobSite: l.job_site,
         dumping: l.dumping,
@@ -562,7 +576,7 @@ function groupLoadsByDate(sheets: ProductionSheet[]) {
 function aggregatePayroll(sheets: ProductionSheet[]) {
   const map = new Map<string, { hours: number; cost: number }>();
   for (const s of sheets) {
-    const driver = s.profiles?.full_name;
+    const driver = s.driver_name;
     if (!driver) continue;
     const entry = map.get(driver) ?? { hours: 0, cost: 0 };
     entry.hours += s.hours ?? 0;

@@ -17,7 +17,7 @@ export default async function LoginPage({
           <div className="text-center">
             <p className="font-extrabold text-lg tracking-tight">ATG Trucking LLC</p>
             <p className="text-xs font-semibold tracking-widest uppercase text-muted">
-              Driver Production
+              Fleet Management
             </p>
           </div>
         </div>
