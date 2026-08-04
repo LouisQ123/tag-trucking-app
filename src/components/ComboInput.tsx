@@ -11,6 +11,7 @@ export default function ComboInput({
   name,
   value,
   onChange,
+  onBlur,
   suggestions,
   placeholder,
   required,
@@ -19,6 +20,7 @@ export default function ComboInput({
   name?: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: (value: string) => void;
   suggestions: string[];
   placeholder?: string;
   required?: boolean;
@@ -66,6 +68,7 @@ export default function ComboInput({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
+          onBlur={(e) => onBlur?.(e.target.value)}
           placeholder={placeholder}
           autoComplete="off"
           className={className ?? "input"}

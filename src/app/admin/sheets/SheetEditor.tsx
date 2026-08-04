@@ -67,6 +67,23 @@ export default function SheetEditor({
   const [startMiles, setStartMiles] = useState(sheet?.start_miles !== null && sheet?.start_miles !== undefined ? String(sheet.start_miles) : "");
   const [endMiles, setEndMiles] = useState(sheet?.end_miles !== null && sheet?.end_miles !== undefined ? String(sheet.end_miles) : "");
   const [remarks, setRemarks] = useState(sheet?.remarks ?? "");
+  // Job sites have no persistent seed list, and a company the admin types
+  // that isn't in COMPANIES isn't saved anywhere either — but while
+  // they're still filling out this sheet, a value typed for one load
+  // should be pickable for the next one instead of retyping it. Cleared
+  // on successful submit, not persisted beyond this sheet.
+  const [extraJobSites, setExtraJobSites] = useState<string[]>(() =>
+    Array.from(new Set((sheet?.loads ?? []).map((l) => l.job_site).filter((v): v is string => !!v)))
+  );
+  const [extraCompanies, setExtraCompanies] = useState<string[]>(() =>
+    Array.from(
+      new Set(
+        (sheet?.loads ?? [])
+          .map((l) => l.company)
+          .filter((v): v is string => !!v && !COMPANIES.includes(v))
+      )
+    )
+  );
   const [loads, setLoads] = useState<LoadRow[]>(
     sheet?.loads?.length
       ? sheet.loads.map((l) => ({
@@ -120,6 +137,32 @@ export default function SheetEditor({
     setDriverName(name);
     if (!hourlyPayTouched && name in driverPayRates) {
       setHourlyPay(String(driverPayRates[name]));
+    }
+  }
+
+  function commitJobSite(v: string) {
+    const trimmed = v.trim();
+    if (trimmed && !extraJobSites.includes(trimmed)) {
+      setExtraJobSites((prev) => [...prev, trimmed]);
+    }
+  }
+  function commitCompany(v: string) {
+    const trimmed = v.trim();
+    if (trimmed && !COMPANIES.includes(trimmed) && !extraCompanies.includes(trimmed)) {
+      setExtraCompanies((prev) => [...prev, trimmed]);
+    }
+  }
+
+  // Adjusted during render (React's recommended pattern), since this
+  // reacts to `state` — a value already produced by this render. Only
+  // matters for Edit Sheet, which stays on the page after saving; New
+  // Sheet redirects away on success, which already resets everything.
+  const [lastHandledState, setLastHandledState] = useState(state);
+  if (state !== lastHandledState) {
+    setLastHandledState(state);
+    if (!state.error) {
+      setExtraJobSites([]);
+      setExtraCompanies([]);
     }
   }
 
@@ -299,11 +342,13 @@ export default function SheetEditor({
                 </button>
               </div>
               <div className="flex flex-col sm:grid sm:grid-cols-4 gap-2.5">
-                <input
+                <ComboInput
                   className="input-sm"
                   placeholder="Job site / plant"
                   value={row.jobSite}
-                  onChange={(e) => updateLoad(row.key, "jobSite", e.target.value)}
+                  onChange={(v) => updateLoad(row.key, "jobSite", v)}
+                  onBlur={commitJobSite}
+                  suggestions={extraJobSites}
                 />
                 <ComboInput
                   className="input-sm"
@@ -324,7 +369,8 @@ export default function SheetEditor({
                   placeholder="Company"
                   value={row.company}
                   onChange={(v) => updateLoad(row.key, "company", v)}
-                  suggestions={COMPANIES}
+                  onBlur={commitCompany}
+                  suggestions={[...COMPANIES, ...extraCompanies]}
                 />
               </div>
               <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2.5">
