@@ -1,11 +1,22 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import DateInput from "@/components/DateInput";
 import BarList from "@/components/charts/BarList";
 import type { ProductionSheet } from "@/lib/types/database";
+import type { jsPDF } from "jspdf";
 
 const SERIES = { blue: "var(--series-blue)", green: "var(--series-green)", orange: "var(--accent)" };
+
+// PDF-only palette — a document doesn't need to match the app's dark UI
+// chrome, just to read cleanly on paper.
+const PDF_INK = "#1a1a1a";
+const PDF_MUTED = "#6b6b6b";
+const PDF_BORDER = "#d8d7d0";
+const PDF_ACCENT = "#c14f22";
+const PDF_BLUE = "#2a6fc9";
+const PDF_GREEN = "#1f8a44";
+const PDF_STRIPE = "#f7f6f2";
 
 type PeriodType = "weekly" | "monthly" | "quarterly" | "yearly";
 
@@ -68,9 +79,19 @@ function periodRange(type: PeriodType, refDate: Date) {
   return { start, end, label: `${start.getFullYear()}` };
 }
 
+function truncateToWidth(pdf: jsPDF, text: string, maxWidth: number): string {
+  if (pdf.getTextWidth(text) <= maxWidth) return text;
+  let t = text;
+  while (t.length > 1 && pdf.getTextWidth(t + "…") > maxWidth) {
+    t = t.slice(0, -1);
+  }
+  return t + "…";
+}
+
 export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
   const [periodType, setPeriodType] = useState<PeriodType>("monthly");
   const [refDate, setRefDate] = useState(todayISO());
+  const [generating, setGenerating] = useState(false);
 
   const { start, end, label } = useMemo(
     () => periodRange(periodType, parseISO(refDate)),
@@ -104,69 +125,206 @@ export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
   }, [filtered]);
 
   const byDriverLoads = useMemo(
-    () =>
-      byDriver
-        .map((d) => ({ label: d.driver, value: d.loads }))
-        .sort((a, b) => b.value - a.value),
+    () => byDriver.map((d) => ({ label: d.driver, value: d.loads })).sort((a, b) => b.value - a.value),
     [byDriver]
   );
   const byDriverMiles = useMemo(
-    () =>
-      byDriver
-        .map((d) => ({ label: d.driver, value: round1(d.miles) }))
-        .sort((a, b) => b.value - a.value),
+    () => byDriver.map((d) => ({ label: d.driver, value: round1(d.miles) })).sort((a, b) => b.value - a.value),
     [byDriver]
   );
   const byDriverCost = useMemo(
-    () =>
-      byDriver
-        .map((d) => ({ label: d.driver, value: d.cost }))
-        .sort((a, b) => b.value - a.value),
+    () => byDriver.map((d) => ({ label: d.driver, value: d.cost })).sort((a, b) => b.value - a.value),
     [byDriver]
   );
 
-  const reportRef = useRef<HTMLDivElement>(null);
-  const [generating, setGenerating] = useState(false);
-
   async function handleDownloadPdf() {
-    const el = reportRef.current;
-    if (!el) return;
     setGenerating(true);
-    // Force light, ink-friendly colors for the capture regardless of the
-    // viewer's dark mode — same values the @media print rules use, just
-    // scoped to this element so screen rendering is untouched.
-    el.classList.add("pdf-light-capture");
     try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import("html2canvas"),
+      const [{ jsPDF: JsPDF }, { default: autoTable }] = await Promise.all([
         import("jspdf"),
+        import("jspdf-autotable"),
       ]);
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
-      const imgData = canvas.toDataURL("image/png");
 
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
-      const margin = 24;
+      const pdf = new JsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const usableWidth = pageWidth - margin * 2;
-      const usableHeight = pageHeight - margin * 2;
-      const imgWidth = usableWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const margin = 40;
+      const contentWidth = pageWidth - margin * 2;
+      const footerReserve = 40;
 
-      let heightLeft = imgHeight;
       let y = margin;
-      pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight);
-      heightLeft -= usableHeight;
-      while (heightLeft > 0) {
-        y = margin - (imgHeight - heightLeft);
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight);
-        heightLeft -= usableHeight;
+
+      function checkPageBreak(needed: number) {
+        if (y + needed > pageHeight - footerReserve) {
+          pdf.addPage();
+          y = margin;
+        }
+      }
+
+      // ---- Header ----
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(18);
+      pdf.setTextColor(PDF_INK);
+      pdf.text("ATG TRUCKING LLC", margin, y + 14);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(PDF_MUTED);
+      pdf.text(`Generated ${fmtShort(new Date())}`, pageWidth - margin, y + 14, { align: "right" });
+
+      y += 28;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(PDF_MUTED);
+      pdf.text(`${periodType.toUpperCase()} REPORT   ·   ${label.toUpperCase()}`, margin, y);
+
+      y += 14;
+      pdf.setDrawColor(PDF_BORDER);
+      pdf.setLineWidth(1);
+      pdf.line(margin, y, pageWidth - margin, y);
+
+      y += 30;
+
+      // ---- Summary metrics ----
+      const metrics: { label: string; value: string; color: string }[] = [
+        { label: "LABOR COST", value: currency(totalLaborCost), color: PDF_ACCENT },
+        { label: "TOTAL LOADS", value: totalLoads.toLocaleString(), color: PDF_INK },
+        { label: "TOTAL MILES", value: `${totalMiles.toLocaleString()} mi`, color: PDF_INK },
+        { label: "TOTAL HOURS", value: `${round1(totalHours).toLocaleString()} hrs`, color: PDF_INK },
+      ];
+      const colWidth = contentWidth / metrics.length;
+      metrics.forEach((m, i) => {
+        const x = margin + i * colWidth;
+        if (i > 0) {
+          pdf.setDrawColor(PDF_BORDER);
+          pdf.setLineWidth(0.75);
+          pdf.line(x - 14, y - 12, x - 14, y + 16);
+        }
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        pdf.setTextColor(PDF_MUTED);
+        pdf.text(m.label, x, y);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(17);
+        pdf.setTextColor(m.color);
+        pdf.text(m.value, x, y + 20);
+      });
+
+      y += 46;
+      pdf.setDrawColor(PDF_BORDER);
+      pdf.setLineWidth(1);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 26;
+
+      // ---- Bar chart sections ----
+      function drawBarChart(
+        title: string,
+        data: { label: string; value: number }[],
+        color: string,
+        fmt: (n: number) => string
+      ) {
+        const labelWidth = 170;
+        const valueWidth = 74;
+        const barAreaX = margin + labelWidth;
+        const barAreaWidth = contentWidth - labelWidth - valueWidth;
+        const barHeight = 9;
+        const rowHeight = 20;
+
+        checkPageBreak(14 + data.length * rowHeight + 14);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(PDF_MUTED);
+        pdf.text(title.toUpperCase(), margin, y);
+        y += 14;
+
+        const max = Math.max(...data.map((d) => d.value), 1);
+
+        data.forEach((d) => {
+          checkPageBreak(rowHeight);
+
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9);
+          pdf.setTextColor(PDF_INK);
+          pdf.text(truncateToWidth(pdf, d.label, labelWidth - 10), margin, y + barHeight - 1);
+
+          pdf.setFillColor(PDF_BORDER);
+          pdf.roundedRect(barAreaX, y - 2, barAreaWidth, barHeight, 2, 2, "F");
+
+          const w = Math.max((d.value / max) * barAreaWidth, d.value > 0 ? 4 : 0);
+          if (w > 0) {
+            pdf.setFillColor(color);
+            pdf.roundedRect(barAreaX, y - 2, w, barHeight, 2, 2, "F");
+          }
+
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(9);
+          pdf.setTextColor(PDF_INK);
+          pdf.text(fmt(d.value), barAreaX + barAreaWidth + 8, y + barHeight - 1);
+
+          y += rowHeight;
+        });
+        y += 14;
+      }
+
+      drawBarChart("Loads by Driver", byDriverLoads, PDF_BLUE, (n) => n.toLocaleString());
+      drawBarChart("Miles by Driver", byDriverMiles, PDF_GREEN, (n) => `${n.toLocaleString()} mi`);
+      drawBarChart("Labor Cost by Driver", byDriverCost, PDF_ACCENT, currency);
+
+      // ---- Detail table ----
+      checkPageBreak(60);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(PDF_MUTED);
+      pdf.text("PRODUCTION DETAIL BY DRIVER", margin, y);
+      y += 10;
+
+      autoTable(pdf, {
+        startY: y,
+        margin: { left: margin, right: margin, bottom: footerReserve },
+        head: [["Driver", "Loads", "Miles", "Hours", "Labor Cost"]],
+        body: byDriver.map((d) => [
+          d.driver,
+          d.loads.toLocaleString(),
+          d.miles.toLocaleString(),
+          round1(d.hours).toLocaleString(),
+          currency(d.cost),
+        ]),
+        foot: [[
+          "Total",
+          totalLoads.toLocaleString(),
+          totalMiles.toLocaleString(),
+          round1(totalHours).toLocaleString(),
+          currency(totalLaborCost),
+        ]],
+        styles: { font: "helvetica", fontSize: 9, textColor: PDF_INK, cellPadding: 6, lineColor: PDF_BORDER },
+        headStyles: { fillColor: PDF_INK, textColor: "#ffffff", fontStyle: "bold" },
+        footStyles: { fillColor: PDF_STRIPE, textColor: PDF_INK, fontStyle: "bold", lineColor: PDF_INK },
+        alternateRowStyles: { fillColor: PDF_STRIPE },
+        columnStyles: {
+          1: { halign: "right" },
+          2: { halign: "right" },
+          3: { halign: "right" },
+          4: { halign: "right" },
+        },
+      });
+
+      // ---- Footer on every page ----
+      const pageCount = pdf.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setDrawColor(PDF_BORDER);
+        pdf.setLineWidth(0.75);
+        pdf.line(margin, pageHeight - 34, pageWidth - margin, pageHeight - 34);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.setTextColor(PDF_MUTED);
+        pdf.text("ATG Trucking LLC — Confidential", margin, pageHeight - 20);
+        pdf.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 20, { align: "right" });
       }
 
       pdf.save(`ATG-Trucking-${periodType}-report-${toISO(start)}.pdf`);
     } finally {
-      el.classList.remove("pdf-light-capture");
       setGenerating(false);
     }
   }
@@ -210,7 +368,7 @@ export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
           <p className="text-sm">Try a different {periodType.replace("ly", "")} or date.</p>
         </div>
       ) : (
-        <div ref={reportRef} className="bg-surface border border-border rounded-xl p-6 print:border-0 print:p-0">
+        <div className="bg-surface border border-border rounded-xl p-6 print:border-0 print:p-0">
           <div className="mb-5">
             <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">
               ATG Trucking LLC — {periodType} Report
