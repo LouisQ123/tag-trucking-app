@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import DateInput from "@/components/DateInput";
+import BarList from "@/components/charts/BarList";
 import type { ProductionSheet } from "@/lib/types/database";
+
+const SERIES = { blue: "var(--series-blue)", green: "var(--series-green)", orange: "var(--accent)" };
 
 type PeriodType = "weekly" | "monthly" | "quarterly" | "yearly";
 
@@ -100,6 +103,74 @@ export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
     );
   }, [filtered]);
 
+  const byDriverLoads = useMemo(
+    () =>
+      byDriver
+        .map((d) => ({ label: d.driver, value: d.loads }))
+        .sort((a, b) => b.value - a.value),
+    [byDriver]
+  );
+  const byDriverMiles = useMemo(
+    () =>
+      byDriver
+        .map((d) => ({ label: d.driver, value: round1(d.miles) }))
+        .sort((a, b) => b.value - a.value),
+    [byDriver]
+  );
+  const byDriverCost = useMemo(
+    () =>
+      byDriver
+        .map((d) => ({ label: d.driver, value: d.cost }))
+        .sort((a, b) => b.value - a.value),
+    [byDriver]
+  );
+
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [generating, setGenerating] = useState(false);
+
+  async function handleDownloadPdf() {
+    const el = reportRef.current;
+    if (!el) return;
+    setGenerating(true);
+    // Force light, ink-friendly colors for the capture regardless of the
+    // viewer's dark mode — same values the @media print rules use, just
+    // scoped to this element so screen rendering is untouched.
+    el.classList.add("pdf-light-capture");
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+      const margin = 24;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+      const imgWidth = usableWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let y = margin;
+      pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight);
+      heightLeft -= usableHeight;
+      while (heightLeft > 0) {
+        y = margin - (imgHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight);
+        heightLeft -= usableHeight;
+      }
+
+      pdf.save(`ATG-Trucking-${periodType}-report-${toISO(start)}.pdf`);
+    } finally {
+      el.classList.remove("pdf-light-capture");
+      setGenerating(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="print:hidden">
@@ -125,10 +196,11 @@ export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
         <DateInput name="ref_date" defaultValue={refDate} onChange={setRefDate} />
         <div className="flex-1" />
         <button
-          onClick={() => window.print()}
-          className="rounded-md bg-accent text-accent-ink font-bold text-xs px-4 py-2"
+          onClick={handleDownloadPdf}
+          disabled={generating || !filtered.length}
+          className="rounded-md bg-accent text-accent-ink font-bold text-xs px-4 py-2 disabled:opacity-60"
         >
-          Print Report
+          {generating ? "Generating…" : "Download PDF"}
         </button>
       </div>
 
@@ -138,7 +210,7 @@ export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
           <p className="text-sm">Try a different {periodType.replace("ly", "")} or date.</p>
         </div>
       ) : (
-        <div className="bg-surface border border-border rounded-xl p-6 print:border-0 print:p-0">
+        <div ref={reportRef} className="bg-surface border border-border rounded-xl p-6 print:border-0 print:p-0">
           <div className="mb-5">
             <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">
               ATG Trucking LLC — {periodType} Report
@@ -151,6 +223,18 @@ export default function ReportsView({ sheets }: { sheets: ProductionSheet[] }) {
             <Kpi label="Total Loads" value={totalLoads.toLocaleString()} />
             <Kpi label="Total Miles" value={totalMiles.toLocaleString()} unit="mi" />
             <Kpi label="Total Hours" value={round1(totalHours).toLocaleString()} unit="hrs" />
+          </div>
+
+          <div className="flex flex-col gap-3.5 mb-6">
+            <ChartCard title="Loads by Driver">
+              <BarList data={byDriverLoads} color={SERIES.blue} labelWidth={220} />
+            </ChartCard>
+            <ChartCard title="Miles by Driver">
+              <BarList data={byDriverMiles} color={SERIES.green} unit="mi" labelWidth={220} />
+            </ChartCard>
+            <ChartCard title="Labor Cost by Driver">
+              <BarList data={byDriverCost} color={SERIES.orange} valueFmt={currency} labelWidth={220} />
+            </ChartCard>
           </div>
 
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-3">
@@ -201,10 +285,19 @@ function Kpi({ label, value, unit, accent }: { label: string; value: string; uni
   return (
     <div className="bg-page border border-border rounded-xl px-4 py-3.5 print:border print:border-grid">
       <p className="text-[10.5px] font-extrabold uppercase tracking-widest text-muted mb-2">{label}</p>
-      <p className={`text-2xl font-extrabold tabular-nums tracking-tight ${accent ? "text-accent" : ""}`}>
+      <p className={`text-2xl font-extrabold tabular-nums tracking-tight ${accent ? "text-accent" : "text-ink"}`}>
         {value}
         {unit && <span className="text-[13px] font-bold text-ink-2 ml-1">{unit}</span>}
       </p>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-page border border-border rounded-xl p-4 print:border print:border-grid">
+      <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-2.5">{title}</p>
+      {children}
     </div>
   );
 }

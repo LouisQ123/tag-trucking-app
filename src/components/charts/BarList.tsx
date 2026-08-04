@@ -12,11 +12,13 @@ export default function BarList({
   color,
   unit,
   valueFmt,
+  labelWidth = 108,
 }: {
   data: BarDatum[];
   color: string;
   unit?: string;
   valueFmt?: (v: number) => string;
+  labelWidth?: number;
 }) {
   const [hover, setHover] = useState<{ x: number; y: number; label: string; value: string } | null>(
     null
@@ -35,7 +37,11 @@ export default function BarList({
         const pct = Math.max((d.value / max) * 100, d.value > 0 ? 3 : 0);
         return (
           <div key={d.label} className="flex items-center gap-2.5 h-[26px]">
-            <div className="w-[108px] flex-none text-right text-[12px] text-ink-2 truncate" title={d.label}>
+            <div
+              className="flex-none text-right text-[12px] text-ink-2 truncate"
+              style={{ width: labelWidth }}
+              title={d.label}
+            >
               {d.label}
             </div>
             <div className="flex-1 relative h-[14px]">
@@ -68,7 +74,7 @@ export default function BarList({
                 />
               </svg>
             </div>
-            <div className="w-16 flex-none text-[12.5px] font-bold tabular-nums">
+            <div className="w-16 flex-none text-[12.5px] font-bold text-ink tabular-nums">
               {fmt(d.value)}
               {unit ? ` ${unit}` : ""}
             </div>
