@@ -1,4 +1,5 @@
 import LoginForm from "./LoginForm";
+import Logo from "@/components/Logo";
 
 export default async function LoginPage({
   searchParams,
@@ -11,8 +12,8 @@ export default async function LoginPage({
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-lg bg-ink text-accent flex items-center justify-center font-extrabold text-sm">
-            ATG
+          <div className="w-12 h-12 rounded-lg bg-ink text-accent flex items-center justify-center">
+            <Logo className="w-8 h-7" />
           </div>
           <div className="text-center">
             <p className="font-extrabold text-lg tracking-tight">ATG Trucking LLC</p>

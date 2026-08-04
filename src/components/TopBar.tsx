@@ -1,5 +1,6 @@
 import SignOutButton from "./SignOutButton";
 import NavLinks from "./NavLinks";
+import Logo from "./Logo";
 
 export default function TopBar() {
   return (
@@ -8,8 +9,8 @@ export default function TopBar() {
         <div className="max-w-6xl mx-auto px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-ink text-accent flex items-center justify-center font-extrabold text-[13px] flex-none">
-                ATG
+              <div className="w-9 h-9 rounded-lg bg-ink text-accent flex items-center justify-center flex-none">
+                <Logo className="w-6 h-5" />
               </div>
               <div className="leading-tight">
                 <p className="font-extrabold text-[15px]">ATG Trucking LLC</p>
