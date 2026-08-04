@@ -7,6 +7,7 @@ export default function NavLinks() {
   const pathname = usePathname();
   const links = [
     { href: "/admin", label: "Dashboard" },
+    { href: "/admin/reports", label: "Reports" },
     { href: "/admin/roster", label: "Roster" },
     { href: "/admin/team", label: "Team" },
     { href: "/account", label: "Account" },

@@ -3,7 +3,7 @@ import NavLinks from "./NavLinks";
 
 export default function TopBar() {
   return (
-    <div className="w-full">
+    <div className="w-full print:hidden">
       <div className="bg-surface border-b border-border">
         <div className="max-w-6xl mx-auto px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center justify-between gap-4">
