@@ -7,6 +7,10 @@ const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+const MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
 function parseISO(iso?: string): Date | null {
   if (!iso) return null;
@@ -50,7 +54,7 @@ export default function DateInput({
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"days" | "years">("days");
+  const [mode, setMode] = useState<"days" | "months" | "years">("days");
   const initial = parseISO(defaultValue) ?? new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
@@ -91,7 +95,17 @@ export default function DateInput({
 
   function selectYear(y: number) {
     setViewYear(y);
+    setMode("months");
+  }
+
+  function selectMonth(m: number) {
+    setViewMonth(m);
     setMode("days");
+  }
+
+  function openYears() {
+    setYearRangeStart(viewYear - 5);
+    setMode("years");
   }
 
   function prevMonth() {
@@ -109,6 +123,17 @@ export default function DateInput({
     } else {
       setViewMonth((m) => m + 1);
     }
+  }
+
+  function handlePrev() {
+    if (mode === "days") prevMonth();
+    else if (mode === "months") setViewYear((y) => y - 1);
+    else setYearRangeStart((y) => y - 12);
+  }
+  function handleNext() {
+    if (mode === "days") nextMonth();
+    else if (mode === "months") setViewYear((y) => y + 1);
+    else setYearRangeStart((y) => y + 12);
   }
 
   const firstOfMonth = new Date(viewYear, viewMonth, 1);
@@ -154,30 +179,57 @@ export default function DateInput({
           <div className="flex items-center justify-between mb-2.5">
             <button
               type="button"
-              onClick={mode === "days" ? prevMonth : () => setYearRangeStart((y) => y - 12)}
-              aria-label={mode === "days" ? "Previous month" : "Previous years"}
-              className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center"
+              onClick={handlePrev}
+              aria-label="Previous"
+              className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center flex-none"
             >
               ‹
             </button>
+
+            {mode === "days" && (
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMode("months")}
+                  className="text-[13px] font-bold rounded-md px-2 py-1 hover:bg-surface-2"
+                >
+                  {MONTH_LABELS[viewMonth]}
+                </button>
+                <button
+                  type="button"
+                  onClick={openYears}
+                  className="text-[13px] font-bold rounded-md px-2 py-1 hover:bg-surface-2 tabular-nums"
+                >
+                  {viewYear}
+                </button>
+              </div>
+            )}
+            {mode === "months" && (
+              <button
+                type="button"
+                onClick={openYears}
+                className="text-[13px] font-bold rounded-md px-2 py-1 hover:bg-surface-2 tabular-nums"
+              >
+                {viewYear}
+              </button>
+            )}
+            {mode === "years" && (
+              <span className="text-[13px] font-bold px-2 py-1 tabular-nums">
+                {yearRangeStart} – {yearRangeStart + 11}
+              </span>
+            )}
+
             <button
               type="button"
-              onClick={() => setMode(mode === "days" ? "years" : "days")}
-              className="text-[13px] font-bold rounded-md px-2 py-1 hover:bg-surface-2"
-            >
-              {mode === "days" ? `${MONTH_LABELS[viewMonth]} ${viewYear}` : `${yearRangeStart} – ${yearRangeStart + 11}`}
-            </button>
-            <button
-              type="button"
-              onClick={mode === "days" ? nextMonth : () => setYearRangeStart((y) => y + 12)}
-              aria-label={mode === "days" ? "Next month" : "Next years"}
-              className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center"
+              onClick={handleNext}
+              aria-label="Next"
+              className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center flex-none"
             >
               ›
             </button>
           </div>
 
-          {mode === "years" ? (
+          {mode === "years" && (
             <div className="grid grid-cols-3 gap-1.5">
               {Array.from({ length: 12 }, (_, i) => yearRangeStart + i).map((y) => (
                 <button
@@ -196,7 +248,30 @@ export default function DateInput({
                 </button>
               ))}
             </div>
-          ) : (
+          )}
+
+          {mode === "months" && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {MONTH_SHORT.map((label, m) => (
+                <button
+                  type="button"
+                  key={label}
+                  onClick={() => selectMonth(m)}
+                  className={`h-9 rounded-md text-[13px] font-semibold ${
+                    m === viewMonth
+                      ? "bg-accent text-accent-ink"
+                      : viewYear === today.getFullYear() && m === today.getMonth()
+                        ? "border border-accent text-accent"
+                        : "text-ink hover:bg-surface-2"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {mode === "days" && (
             <>
               <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted mb-1">
                 {WEEKDAY_LABELS.map((w, i) => (
