@@ -62,6 +62,7 @@ export interface InvoiceLineItem {
 
 export interface InvoicePdfClient {
   name: string;
+  company: string | null;
   address_line1: string | null;
   city_state_zip: string | null;
   phone: string | null;
@@ -157,6 +158,12 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
   pdf.setTextColor(PDF_INK);
   pdf.text(input.client.name, margin, y);
   y += 13;
+  if (input.client.company) {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.text(input.client.company, margin, y);
+    y += 13;
+  }
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(PDF_INK);
   const addressLines = [

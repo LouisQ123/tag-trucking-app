@@ -41,6 +41,14 @@ export default function EditClientForm({ client }: { client: Client }) {
           <Field label="Name">
             <input name="name" defaultValue={client.name} required className="input" />
           </Field>
+          <Field label="Company">
+            <input
+              name="company"
+              defaultValue={client.company ?? ""}
+              placeholder="Business name, if different from contact"
+              className="input"
+            />
+          </Field>
           <Field label="Address">
             <input
               name="address_line1"

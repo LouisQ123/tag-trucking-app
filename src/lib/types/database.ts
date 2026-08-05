@@ -59,6 +59,7 @@ export interface InvoiceTicket {
 export interface Client {
   id: string;
   name: string;
+  company: string | null;
   address_line1: string | null;
   city_state_zip: string | null;
   phone: string | null;

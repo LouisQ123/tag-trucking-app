@@ -417,6 +417,7 @@ create policy invoice_tickets_delete on public.invoice_tickets
 create table if not exists public.clients (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  company text,
   address_line1 text,
   city_state_zip text,
   phone text,
@@ -427,6 +428,10 @@ create table if not exists public.clients (
 );
 
 comment on column public.clients.default_rate is 'Prefills a new ticket''s Rate field for this client, same convention as drivers.hourly_pay.';
+comment on column public.clients.company is 'Business/company name, separate from name (which may be a contact person) — shown under the contact on the invoice Bill To block.';
+
+-- Retrofit for databases created before this column existed.
+alter table public.clients add column if not exists company text;
 
 alter table public.clients enable row level security;
 

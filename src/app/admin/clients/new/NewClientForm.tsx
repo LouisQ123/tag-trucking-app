@@ -17,6 +17,9 @@ export default function NewClientForm() {
           <Field label="Name">
             <input name="name" required className="input" />
           </Field>
+          <Field label="Company">
+            <input name="company" placeholder="Business name, if different from contact" className="input" />
+          </Field>
           <Field label="Address">
             <input name="address_line1" placeholder="Street address" className="input" />
           </Field>

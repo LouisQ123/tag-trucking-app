@@ -128,6 +128,7 @@ export default function GenerateInvoiceForm({
           date,
           client: {
             name: client.name,
+            company: client.company,
             address_line1: client.address_line1,
             city_state_zip: client.city_state_zip,
             phone: client.phone,
@@ -200,7 +201,8 @@ export default function GenerateInvoiceForm({
         </Field>
         {client && (
           <p className="text-[12.5px] text-ink-2 mt-2">
-            {[client.address_line1, client.city_state_zip].filter(Boolean).join(", ") || "No address on file"}
+            {[client.company, client.address_line1, client.city_state_zip].filter(Boolean).join(", ") ||
+              "No address on file"}
           </p>
         )}
       </Card>

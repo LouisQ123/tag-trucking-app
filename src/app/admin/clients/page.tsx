@@ -24,10 +24,11 @@ export default async function ClientsPage() {
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                 <th className="px-4 py-2.5">Name</th>
+                <th className="px-4 py-2.5">Company</th>
                 <th className="px-4 py-2.5">Address</th>
                 <th className="px-4 py-2.5">Phone</th>
                 <th className="px-4 py-2.5">Email</th>
@@ -42,6 +43,7 @@ export default async function ClientsPage() {
                       {c.name}
                     </Link>
                   </td>
+                  <td className="px-4 py-3 text-ink-2">{c.company ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-2">
                     {c.address_line1 || c.city_state_zip
                       ? `${c.address_line1 ?? ""}${c.address_line1 && c.city_state_zip ? ", " : ""}${c.city_state_zip ?? ""}`
@@ -56,7 +58,7 @@ export default async function ClientsPage() {
               ))}
               {!clients.length && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-ink-2">
+                  <td colSpan={6} className="px-4 py-10 text-center text-ink-2">
                     No clients yet. Add your first one.
                   </td>
                 </tr>

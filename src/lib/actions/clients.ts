@@ -19,6 +19,7 @@ function numOrNull(formData: FormData, key: string) {
 function clientFields(formData: FormData) {
   return {
     name: str(formData, "name"),
+    company: str(formData, "company") || null,
     address_line1: str(formData, "address_line1") || null,
     city_state_zip: str(formData, "city_state_zip") || null,
     phone: str(formData, "phone") || null,
