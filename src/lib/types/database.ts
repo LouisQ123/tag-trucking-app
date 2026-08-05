@@ -38,6 +38,48 @@ export interface Load {
   note: string | null;
 }
 
+export interface InvoiceTicket {
+  id: string;
+  ticket_no: string | null;
+  date: string;
+  client: string;
+  location_project: string | null;
+  truck_number: string | null;
+  company_name: string;
+  time_in: string | null;
+  time_out: string | null;
+  travel_time_hours: number | null;
+  total_hours: number | null;
+  loads: number | null;
+  rate: number | null;
+  invoice_id: string | null;
+  created_at: string;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  address_line1: string | null;
+  city_state_zip: string | null;
+  phone: string | null;
+  fax: string | null;
+  email: string | null;
+  default_rate: number | null;
+  created_at: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoice_no: string;
+  date: string;
+  client_id: string;
+  customer: string | null;
+  for_description: string | null;
+  terms: string;
+  total: number;
+  created_at: string;
+}
+
 export interface ProductionSheet {
   id: string;
   driver_name: string;

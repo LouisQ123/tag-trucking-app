@@ -366,7 +366,116 @@ create policy drivers_delete on public.drivers
   for delete using (public.is_admin());
 
 -- ============================================================
--- 10. BOOTSTRAP THE FIRST ADMIN
+-- 10. INVOICE TICKETS — one row per client billing ticket, independent of
+--    production_sheets (which tracks driver payroll/production, not
+--    per-client billing). Mirrors the paper "daily truck ticket" format.
+-- ============================================================
+create table if not exists public.invoice_tickets (
+  id uuid primary key default gen_random_uuid(),
+  ticket_no text,
+  date date not null,
+  client text not null,
+  location_project text,
+  truck_number text,
+  company_name text not null default 'ATG Trucking LLC',
+  time_in time,
+  time_out time,
+  travel_time_hours numeric(5, 2) check (travel_time_hours is null or travel_time_hours >= 0),
+  total_hours numeric(5, 2) check (total_hours is null or total_hours >= 0),
+  loads integer check (loads is null or loads >= 0),
+  created_at timestamptz not null default now()
+);
+
+comment on column public.invoice_tickets.total_hours is 'Computed client-side from time_in/time_out minus travel_time_hours at save time, same convention as production_sheets.hours — not a generated column, so a ticket keyed in from a paper original can still be corrected by hand later.';
+
+create index if not exists invoice_tickets_date_idx on public.invoice_tickets (date desc);
+
+alter table public.invoice_tickets enable row level security;
+
+drop policy if exists invoice_tickets_select on public.invoice_tickets;
+create policy invoice_tickets_select on public.invoice_tickets
+  for select using (public.is_admin());
+
+drop policy if exists invoice_tickets_insert on public.invoice_tickets;
+create policy invoice_tickets_insert on public.invoice_tickets
+  for insert with check (public.is_admin());
+
+drop policy if exists invoice_tickets_update on public.invoice_tickets;
+create policy invoice_tickets_update on public.invoice_tickets
+  for update using (public.is_admin());
+
+drop policy if exists invoice_tickets_delete on public.invoice_tickets;
+create policy invoice_tickets_delete on public.invoice_tickets
+  for delete using (public.is_admin());
+
+-- ============================================================
+-- 11. CLIENTS — billing/mailing info for who ATG invoices (the "Bill To"
+--    box on a generated invoice). Independent of invoice_tickets.client
+--    (free text) so a typo'd or one-off name on a ticket never blocks
+--    saving it — same relationship as drivers roster <-> driver_name.
+-- ============================================================
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  address_line1 text,
+  city_state_zip text,
+  phone text,
+  fax text,
+  email text,
+  default_rate numeric(8, 2) check (default_rate is null or default_rate >= 0),
+  created_at timestamptz not null default now()
+);
+
+comment on column public.clients.default_rate is 'Prefills a new ticket''s Rate field for this client, same convention as drivers.hourly_pay.';
+
+alter table public.clients enable row level security;
+
+drop policy if exists clients_select on public.clients;
+create policy clients_select on public.clients for select using (public.is_admin());
+drop policy if exists clients_insert on public.clients;
+create policy clients_insert on public.clients for insert with check (public.is_admin());
+drop policy if exists clients_update on public.clients;
+create policy clients_update on public.clients for update using (public.is_admin());
+drop policy if exists clients_delete on public.clients;
+create policy clients_delete on public.clients for delete using (public.is_admin());
+
+-- ============================================================
+-- 12. INVOICES — a generated billing document that groups one or more
+--    invoice_tickets for a single client into one PDF with a total.
+-- ============================================================
+create table if not exists public.invoices (
+  id uuid primary key default gen_random_uuid(),
+  invoice_no text not null,
+  date date not null,
+  client_id uuid not null references public.clients (id),
+  customer text,
+  for_description text,
+  terms text not null default 'Net 30 days',
+  total numeric(10, 2) not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists invoices_client_idx on public.invoices (client_id, date desc);
+
+alter table public.invoices enable row level security;
+
+drop policy if exists invoices_select on public.invoices;
+create policy invoices_select on public.invoices for select using (public.is_admin());
+drop policy if exists invoices_insert on public.invoices;
+create policy invoices_insert on public.invoices for insert with check (public.is_admin());
+drop policy if exists invoices_update on public.invoices;
+create policy invoices_update on public.invoices for update using (public.is_admin());
+drop policy if exists invoices_delete on public.invoices;
+create policy invoices_delete on public.invoices for delete using (public.is_admin());
+
+-- invoice_tickets: per-ticket $/hr rate (for the invoice line's Amount),
+-- and which generated invoice (if any) this ticket has been billed on.
+alter table public.invoice_tickets add column if not exists rate numeric(8, 2) check (rate is null or rate >= 0);
+alter table public.invoice_tickets add column if not exists invoice_id uuid references public.invoices (id) on delete set null;
+create index if not exists invoice_tickets_invoice_idx on public.invoice_tickets (invoice_id);
+
+-- ============================================================
+-- 13. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication
 --    -> Users -> Add user (check "Auto Confirm User"). This creates a
