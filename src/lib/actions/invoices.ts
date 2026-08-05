@@ -6,6 +6,28 @@ import { requireAdmin } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import type { ActionState } from "@/lib/actions/auth";
 
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+// Invoices store a total snapshot rather than computing it on every read —
+// but a ticket's rate/hours can be edited (or the ticket removed) after the
+// invoice was generated, so that snapshot must be kept in sync whenever a
+// linked ticket changes, not just when it's explicitly un-invoiced.
+async function recomputeInvoiceTotal(supabase: Supabase, invoiceId: string) {
+  const { data: rows } = await supabase
+    .from("invoice_tickets")
+    .select("total_hours, rate")
+    .eq("invoice_id", invoiceId);
+
+  const total = (rows ?? []).reduce((sum, t) => {
+    return sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0);
+  }, 0);
+
+  await supabase
+    .from("invoices")
+    .update({ total: Math.round(total * 100) / 100 })
+    .eq("id", invoiceId);
+}
+
 function str(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
@@ -62,8 +84,15 @@ export async function updateInvoiceTicket(_prev: ActionState, formData: FormData
   if (!id || !fields.date || !fields.client) return { error: "Date and client are required." };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("invoice_tickets").update(fields).eq("id", id);
+  const { data: updated, error } = await supabase
+    .from("invoice_tickets")
+    .update(fields)
+    .eq("id", id)
+    .select("invoice_id")
+    .single();
   if (error) return { error: error.message };
+
+  if (updated?.invoice_id) await recomputeInvoiceTotal(supabase, updated.invoice_id);
 
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${id}`);
@@ -73,9 +102,75 @@ export async function updateInvoiceTicket(_prev: ActionState, formData: FormData
 export async function deleteInvoiceTicket(id: string) {
   await requireAdmin();
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("invoice_tickets")
+    .select("invoice_id")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase.from("invoice_tickets").delete().eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (existing?.invoice_id) await recomputeInvoiceTotal(supabase, existing.invoice_id);
+
   revalidatePath("/admin/invoices");
+  revalidatePath("/admin/invoices/history");
+}
+
+// Un-invoices a ticket that was included by mistake — the ticket itself
+// stays, it just becomes billable on a future invoice again.
+export async function removeTicketFromInvoice(ticketId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("invoice_tickets")
+    .select("invoice_id")
+    .eq("id", ticketId)
+    .single();
+  const invoiceId = existing?.invoice_id;
+  if (!invoiceId) return;
+
+  const { error } = await supabase
+    .from("invoice_tickets")
+    .update({ invoice_id: null })
+    .eq("id", ticketId);
+  if (error) throw new Error(error.message);
+
+  await recomputeInvoiceTotal(supabase, invoiceId);
+
+  revalidatePath("/admin/invoices");
+  revalidatePath(`/admin/invoices/history/${invoiceId}`);
+  revalidatePath("/admin/invoices/history");
+}
+
+// Deleting the invoice record itself — its tickets aren't deleted, they're
+// automatically un-invoiced (invoice_tickets.invoice_id references invoices
+// with ON DELETE SET NULL) and become billable again.
+export async function deleteInvoiceRecord(invoiceId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/invoices");
+  revalidatePath("/admin/invoices/history");
+}
+
+export async function updateInvoiceStatus(invoiceId: string, status: "pending" | "paid", checkNumber: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("invoices")
+    .update({
+      status,
+      // A check number only means something once the invoice is marked
+      // paid — clear it going back to pending so it can't show stale.
+      check_number: status === "paid" ? checkNumber.trim() || null : null,
+    })
+    .eq("id", invoiceId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/invoices/history");
+  revalidatePath(`/admin/invoices/history/${invoiceId}`);
 }
 
 export interface GenerateInvoiceInput {

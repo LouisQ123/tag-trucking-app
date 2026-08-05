@@ -69,6 +69,8 @@ export interface Client {
   created_at: string;
 }
 
+export type InvoiceStatus = "pending" | "paid";
+
 export interface Invoice {
   id: string;
   invoice_no: string;
@@ -78,6 +80,8 @@ export interface Invoice {
   for_description: string | null;
   terms: string;
   total: number;
+  status: InvoiceStatus;
+  check_number: string | null;
   created_at: string;
 }
 

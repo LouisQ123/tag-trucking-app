@@ -46,6 +46,12 @@ export default async function InvoicesPage() {
         </div>
         <div className="flex items-center gap-2.5">
           <Link
+            href="/admin/invoices/history"
+            className="rounded-lg border border-border text-ink font-bold text-sm px-4 py-2.5"
+          >
+            Invoice History
+          </Link>
+          <Link
             href="/admin/invoices/generate"
             className="rounded-lg border border-border text-ink font-bold text-sm px-4 py-2.5"
           >
@@ -105,10 +111,13 @@ export default async function InvoicesPage() {
                     <td className="px-4 py-3 tabular-nums">{t.loads ?? "—"}</td>
                     <td className="px-4 py-3">
                       {invoiceNo ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-good">
+                        <Link
+                          href={`/admin/invoices/history/${t.invoice_id}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-good hover:underline"
+                        >
                           <span className="w-1.5 h-1.5 rounded-full bg-current" />
                           #{invoiceNo}
-                        </span>
+                        </Link>
                       ) : (
                         <span className="text-[11px] font-semibold text-muted">Not invoiced</span>
                       )}

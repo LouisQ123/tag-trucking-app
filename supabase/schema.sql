@@ -457,10 +457,16 @@ create table if not exists public.invoices (
   for_description text,
   terms text not null default 'Net 30 days',
   total numeric(10, 2) not null default 0,
+  status text not null default 'pending' check (status in ('pending', 'paid')),
+  check_number text,
   created_at timestamptz not null default now()
 );
 
 create index if not exists invoices_client_idx on public.invoices (client_id, date desc);
+
+-- Retrofit for databases created before these columns existed.
+alter table public.invoices add column if not exists status text not null default 'pending' check (status in ('pending', 'paid'));
+alter table public.invoices add column if not exists check_number text;
 
 alter table public.invoices enable row level security;
 
