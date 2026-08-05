@@ -30,13 +30,15 @@ function currency(n: number) {
 export default function GenerateInvoiceForm({
   clients,
   tickets,
+  nextInvoiceNo,
 }: {
   clients: Client[];
   tickets: InvoiceTicket[];
+  nextInvoiceNo: string;
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
-  const [invoiceNo, setInvoiceNo] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState(nextInvoiceNo);
   const [date, setDate] = useState(todayISO());
   const [customer, setCustomer] = useState("");
   const [forDescription, setForDescription] = useState("Dump Truck Rental");
@@ -147,6 +149,13 @@ export default function GenerateInvoiceForm({
       await download();
       setLastGenerated(() => download);
       setSuccess({ invoiceNo: invoiceNo.trim(), total });
+      // Advance the field for the next invoice in this session — router.refresh()
+      // re-fetches nextInvoiceNo from the server, but a prop change alone
+      // doesn't reset state already initialized from it.
+      const submittedAsNumber = Number(invoiceNo.trim());
+      if (Number.isInteger(submittedAsNumber) && submittedAsNumber > 0) {
+        setInvoiceNo(String(submittedAsNumber + 1));
+      }
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -198,11 +207,10 @@ export default function GenerateInvoiceForm({
 
       <Card title="Invoice Details">
         <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3.5">
-          <Field label="Invoice #">
+          <Field label="Invoice #" hint="Auto-suggested — edit if you need a different number">
             <input
               value={invoiceNo}
               onChange={(e) => setInvoiceNo(e.target.value)}
-              placeholder="e.g. LCD7142026D"
               className="input"
             />
           </Field>
@@ -305,11 +313,20 @@ function Card({ title, children }: { title: React.ReactNode; children: React.Rea
     </div>
   );
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5 min-w-0 w-full">
       <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">{label}</label>
       {children}
+      {hint && <span className="text-[11px] text-muted">{hint}</span>}
     </div>
   );
 }

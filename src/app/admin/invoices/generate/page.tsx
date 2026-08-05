@@ -3,14 +3,22 @@ import { createClient } from "@/lib/supabase/server";
 import type { Client, InvoiceTicket } from "@/lib/types/database";
 import GenerateInvoiceForm from "./GenerateInvoiceForm";
 
+function nextInvoiceNumber(existing: string[]): string {
+  const numbers = existing.map((v) => Number(v)).filter((n) => Number.isInteger(n) && n > 0);
+  const max = numbers.length ? Math.max(...numbers) : 0;
+  return String(max + 1);
+}
+
 export default async function GenerateInvoicePage() {
   const supabase = await createClient();
-  const [{ data: clients }, { data: tickets }] = await Promise.all([
+  const [{ data: clients }, { data: tickets }, { data: invoices }] = await Promise.all([
     supabase.from("clients").select("*").order("name"),
     supabase.from("invoice_tickets").select("*").is("invoice_id", null).order("date"),
+    supabase.from("invoices").select("invoice_no"),
   ]);
 
   const clientRows = (clients as Client[]) ?? [];
+  const nextNo = nextInvoiceNumber(((invoices ?? []) as { invoice_no: string }[]).map((i) => i.invoice_no));
 
   if (!clientRows.length) {
     return (
@@ -39,7 +47,11 @@ export default async function GenerateInvoicePage() {
           Pick a client, choose which tickets to bill, and download the invoice PDF.
         </p>
       </div>
-      <GenerateInvoiceForm clients={clientRows} tickets={(tickets as InvoiceTicket[]) ?? []} />
+      <GenerateInvoiceForm
+        clients={clientRows}
+        tickets={(tickets as InvoiceTicket[]) ?? []}
+        nextInvoiceNo={nextNo}
+      />
     </main>
   );
 }
