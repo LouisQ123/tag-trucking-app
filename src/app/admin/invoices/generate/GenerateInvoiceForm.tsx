@@ -47,12 +47,26 @@ export default function GenerateInvoiceForm({
   const [lastGenerated, setLastGenerated] = useState<(() => Promise<void>) | null>(null);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
-  const matchingTickets = useMemo(
-    () => tickets.filter((t) => client && t.client === client.name),
+
+  // Every un-invoiced ticket is selectable here, not just ones whose free-text
+  // Client field happens to match this Bill-To exactly — a typo'd or
+  // differently-worded client name on a ticket shouldn't hide it from being
+  // picked. Tickets matching the selected client are pre-checked as a
+  // convenience default; everything else stays available to check by hand.
+  const sortedTickets = useMemo(
+    () =>
+      [...tickets].sort((a, b) => {
+        const aMatch = client && a.client === client.name ? 0 : 1;
+        const bMatch = client && b.client === client.name ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      }),
     [tickets, client]
   );
 
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(matchingTickets.map((t) => t.id)));
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(tickets.filter((t) => client && t.client === client.name).map((t) => t.id))
+  );
 
   function onClientChange(id: string) {
     setClientId(id);
@@ -70,7 +84,7 @@ export default function GenerateInvoiceForm({
     });
   }
 
-  const selectedTickets = matchingTickets.filter((t) => selected.has(t.id));
+  const selectedTickets = sortedTickets.filter((t) => selected.has(t.id));
   const total = selectedTickets.reduce((sum, t) => sum + (t.rate !== null ? (t.total_hours ?? 0) * t.rate : 0), 0);
 
   async function handleGenerate() {
@@ -212,15 +226,16 @@ export default function GenerateInvoiceForm({
         </div>
       </Card>
 
-      <Card title={`Tickets to Bill (${selectedTickets.length} of ${matchingTickets.length})`}>
-        {matchingTickets.length ? (
+      <Card title={`Tickets to Bill (${selectedTickets.length} of ${sortedTickets.length})`}>
+        {sortedTickets.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
+            <table className="w-full text-sm min-w-[680px]">
               <thead>
                 <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                   <th className="py-2 pr-2 w-8"></th>
                   <th className="py-2 pr-2">Date</th>
                   <th className="py-2 pr-2">Ticket #</th>
+                  <th className="py-2 pr-2">Client</th>
                   <th className="py-2 pr-2">Truck #</th>
                   <th className="py-2 pr-2 text-right">Hours</th>
                   <th className="py-2 pr-2 text-right">Rate</th>
@@ -228,8 +243,9 @@ export default function GenerateInvoiceForm({
                 </tr>
               </thead>
               <tbody>
-                {matchingTickets.map((t) => {
+                {sortedTickets.map((t) => {
                   const amount = t.rate !== null ? (t.total_hours ?? 0) * t.rate : null;
+                  const isMatch = client && t.client === client.name;
                   return (
                     <tr key={t.id} className="border-t border-grid">
                       <td className="py-2 pr-2">
@@ -241,6 +257,7 @@ export default function GenerateInvoiceForm({
                       </td>
                       <td className="py-2 pr-2 tabular-nums">{fmtDate(t.date)}</td>
                       <td className="py-2 pr-2 text-ink-2 tabular-nums">{t.ticket_no ?? "—"}</td>
+                      <td className={`py-2 pr-2 ${isMatch ? "font-semibold" : "text-muted"}`}>{t.client}</td>
                       <td className="py-2 pr-2 text-ink-2 tabular-nums">{t.truck_number ?? "—"}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">{t.total_hours ?? "—"}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">
@@ -256,7 +273,7 @@ export default function GenerateInvoiceForm({
             </table>
           </div>
         ) : (
-          <p className="text-sm text-ink-2">No un-invoiced tickets for this client.</p>
+          <p className="text-sm text-ink-2">No un-invoiced tickets yet.</p>
         )}
         <div className="flex justify-end mt-3 pt-3 border-t border-grid">
           <span className="text-[13px] font-extrabold text-ink-2 mr-2">Total</span>
