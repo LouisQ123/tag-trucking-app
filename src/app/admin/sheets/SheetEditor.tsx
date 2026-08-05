@@ -67,13 +67,32 @@ export default function SheetEditor({
   const [startMiles, setStartMiles] = useState(sheet?.start_miles !== null && sheet?.start_miles !== undefined ? String(sheet.start_miles) : "");
   const [endMiles, setEndMiles] = useState(sheet?.end_miles !== null && sheet?.end_miles !== undefined ? String(sheet.end_miles) : "");
   const [remarks, setRemarks] = useState(sheet?.remarks ?? "");
-  // Job sites have no persistent seed list, and a company the admin types
-  // that isn't in COMPANIES isn't saved anywhere either — but while
-  // they're still filling out this sheet, a value typed for one load
-  // should be pickable for the next one instead of retyping it. Cleared
-  // on successful submit, not persisted beyond this sheet.
+  // None of these four per-load fields have a persistent seed list that
+  // covers everything an admin might type (job site and company have no
+  // seed list at all; dumping/material have a fixed static list) — but
+  // while they're still filling out this sheet, a value typed for one
+  // load should be pickable for the next one instead of retyping it.
+  // Cleared on successful submit, not persisted beyond this sheet.
   const [extraJobSites, setExtraJobSites] = useState<string[]>(() =>
     Array.from(new Set((sheet?.loads ?? []).map((l) => l.job_site).filter((v): v is string => !!v)))
+  );
+  const [extraDumpingLocations, setExtraDumpingLocations] = useState<string[]>(() =>
+    Array.from(
+      new Set(
+        (sheet?.loads ?? [])
+          .map((l) => l.dumping)
+          .filter((v): v is string => !!v && !DUMPING_LOCATIONS.includes(v))
+      )
+    )
+  );
+  const [extraMaterialTypes, setExtraMaterialTypes] = useState<string[]>(() =>
+    Array.from(
+      new Set(
+        (sheet?.loads ?? [])
+          .map((l) => l.type)
+          .filter((v): v is string => !!v && !MATERIAL_TYPES.includes(v))
+      )
+    )
   );
   const [extraCompanies, setExtraCompanies] = useState<string[]>(() =>
     Array.from(
@@ -146,6 +165,18 @@ export default function SheetEditor({
       setExtraJobSites((prev) => [...prev, trimmed]);
     }
   }
+  function commitDumping(v: string) {
+    const trimmed = v.trim();
+    if (trimmed && !DUMPING_LOCATIONS.includes(trimmed) && !extraDumpingLocations.includes(trimmed)) {
+      setExtraDumpingLocations((prev) => [...prev, trimmed]);
+    }
+  }
+  function commitType(v: string) {
+    const trimmed = v.trim();
+    if (trimmed && !MATERIAL_TYPES.includes(trimmed) && !extraMaterialTypes.includes(trimmed)) {
+      setExtraMaterialTypes((prev) => [...prev, trimmed]);
+    }
+  }
   function commitCompany(v: string) {
     const trimmed = v.trim();
     if (trimmed && !COMPANIES.includes(trimmed) && !extraCompanies.includes(trimmed)) {
@@ -162,6 +193,8 @@ export default function SheetEditor({
     setLastHandledState(state);
     if (!state.error) {
       setExtraJobSites([]);
+      setExtraDumpingLocations([]);
+      setExtraMaterialTypes([]);
       setExtraCompanies([]);
     }
   }
@@ -355,14 +388,16 @@ export default function SheetEditor({
                   placeholder="Dumping location"
                   value={row.dumping}
                   onChange={(v) => updateLoad(row.key, "dumping", v)}
-                  suggestions={DUMPING_LOCATIONS}
+                  onBlur={commitDumping}
+                  suggestions={[...DUMPING_LOCATIONS, ...extraDumpingLocations]}
                 />
                 <ComboInput
                   className="input-sm"
                   placeholder="Material type"
                   value={row.type}
                   onChange={(v) => updateLoad(row.key, "type", v)}
-                  suggestions={MATERIAL_TYPES}
+                  onBlur={commitType}
+                  suggestions={[...MATERIAL_TYPES, ...extraMaterialTypes]}
                 />
                 <ComboInput
                   className="input-sm"
