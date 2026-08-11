@@ -82,6 +82,19 @@ export default function InvoiceEditor({
     ticket?.rate !== null && ticket?.rate !== undefined ? String(ticket.rate) : ""
   );
   const [rateTouched, setRateTouched] = useState(false);
+  const [towRate, setTowRate] = useState(
+    ticket?.tow_rate !== null && ticket?.tow_rate !== undefined ? String(ticket.tow_rate) : ""
+  );
+  const [towCount, setTowCount] = useState(
+    ticket?.tow_count !== null && ticket?.tow_count !== undefined ? String(ticket.tow_count) : ""
+  );
+
+  const towReimbursement = useMemo(() => {
+    const r = Number(towRate),
+      c = Number(towCount);
+    if (!towRate || !towCount || r <= 0 || c <= 0) return null;
+    return Math.round(r * c * 100) / 100;
+  }, [towRate, towCount]);
 
   function onClientChange(name: string) {
     setClient(name);
@@ -240,6 +253,40 @@ export default function InvoiceEditor({
               placeholder="0.00"
               className="input"
             />
+          </Field>
+        </div>
+      </Card>
+
+      <Card title="Tow Reimbursement">
+        <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
+          <Field label="Tow Rate ($/tow)">
+            <input
+              type="number"
+              name="tow_rate"
+              min={0}
+              step={0.25}
+              value={towRate}
+              onChange={(e) => setTowRate(e.target.value)}
+              placeholder="0.00"
+              className="input"
+            />
+          </Field>
+          <Field label="Number of Tows">
+            <input
+              type="number"
+              name="tow_count"
+              min={0}
+              step={1}
+              value={towCount}
+              onChange={(e) => setTowCount(e.target.value)}
+              placeholder="0"
+              className="input"
+            />
+          </Field>
+          <Field label="Reimbursement" hint="Tow rate × number of tows">
+            <div className="font-bold text-accent text-[15px] py-2 tabular-nums">
+              {towReimbursement !== null ? `$${towReimbursement.toLocaleString()}` : "—"}
+            </div>
           </Field>
         </div>
       </Card>

@@ -58,6 +58,7 @@ export interface InvoiceLineItem {
   truckNumber: string | null;
   hours: number;
   rate: number | null;
+  towAmount: number | null;
 }
 
 export interface InvoicePdfClient {
@@ -210,12 +211,15 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
   y = Math.max(leftColBottom, ry) + 16;
 
   // ---- Line items table ----
-  const total = input.lines.reduce((sum, l) => sum + (l.rate !== null ? l.hours * l.rate : 0), 0);
+  const total = input.lines.reduce(
+    (sum, l) => sum + (l.rate !== null ? l.hours * l.rate : 0) + (l.towAmount ?? 0),
+    0
+  );
 
   autoTable(pdf, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Date", "Ticket #", "Truck #", "Hours", "Rate", "Amount"]],
+    head: [["Date", "Ticket #", "Truck #", "Hours", "Rate", "Amount", "Tow"]],
     body: input.lines.map((l) => [
       fmtDate(l.date),
       l.ticketNo ?? "",
@@ -223,6 +227,7 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
       l.hours.toLocaleString(),
       l.rate !== null ? currency(l.rate) : "—",
       l.rate !== null ? currency(l.hours * l.rate) : "—",
+      l.towAmount !== null ? currency(l.towAmount) : "—",
     ]),
     styles: { font: "helvetica", fontSize: 9, textColor: PDF_INK, cellPadding: 6, lineColor: PDF_BORDER },
     headStyles: { fillColor: PDF_MAROON, textColor: "#ffffff", fontStyle: "bold" },
@@ -231,6 +236,7 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
       3: { halign: "right" },
       4: { halign: "right" },
       5: { halign: "right" },
+      6: { halign: "right" },
     },
     didDrawPage: () => {
       pdf.setFont("helvetica", "normal");

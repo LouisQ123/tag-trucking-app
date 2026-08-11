@@ -15,11 +15,13 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 async function recomputeInvoiceTotal(supabase: Supabase, invoiceId: string) {
   const { data: rows } = await supabase
     .from("invoice_tickets")
-    .select("total_hours, rate")
+    .select("total_hours, rate, tow_rate, tow_count")
     .eq("invoice_id", invoiceId);
 
   const total = (rows ?? []).reduce((sum, t) => {
-    return sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0);
+    const labor = t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0;
+    const tow = t.tow_rate !== null && t.tow_count !== null ? t.tow_rate * t.tow_count : 0;
+    return sum + labor + tow;
   }, 0);
 
   await supabase
@@ -59,6 +61,8 @@ function ticketFields(formData: FormData) {
     total_hours: numOrNull(formData, "total_hours"),
     loads: intOrNull(formData, "loads"),
     rate: numOrNull(formData, "rate"),
+    tow_rate: numOrNull(formData, "tow_rate"),
+    tow_count: intOrNull(formData, "tow_count"),
   };
 }
 

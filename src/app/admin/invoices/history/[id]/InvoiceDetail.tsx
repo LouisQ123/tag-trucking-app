@@ -20,6 +20,9 @@ function fmtDate(iso: string): string {
 function currency(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
+function towAmount(t: InvoiceTicket): number | null {
+  return t.tow_rate !== null && t.tow_count !== null ? t.tow_rate * t.tow_count : null;
+}
 
 export default function InvoiceDetail({
   invoice,
@@ -41,7 +44,11 @@ export default function InvoiceDetail({
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusSaved, setStatusSaved] = useState(false);
 
-  const total = rows.reduce((sum, t) => sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0), 0);
+  const total = rows.reduce(
+    (sum, t) =>
+      sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0) + (towAmount(t) ?? 0),
+    0
+  );
 
   async function handleRemove(ticketId: string) {
     if (!confirm("Remove this ticket from the invoice? It stays on file and can be billed on a future invoice.")) return;
@@ -116,6 +123,7 @@ export default function InvoiceDetail({
           truckNumber: t.truck_number,
           hours: t.total_hours ?? 0,
           rate: t.rate,
+          towAmount: towAmount(t),
         })),
       });
     } finally {
@@ -214,7 +222,7 @@ export default function InvoiceDetail({
         </p>
         {rows.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm min-w-[680px]">
               <thead>
                 <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                   <th className="py-2 pr-2">Date</th>
@@ -223,12 +231,14 @@ export default function InvoiceDetail({
                   <th className="py-2 pr-2 text-right">Hours</th>
                   <th className="py-2 pr-2 text-right">Rate</th>
                   <th className="py-2 pr-2 text-right">Amount</th>
+                  <th className="py-2 pr-2 text-right">Tow</th>
                   <th className="py-2 pl-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((t) => {
                   const amount = t.rate !== null ? (t.total_hours ?? 0) * t.rate : null;
+                  const tow = towAmount(t);
                   return (
                     <tr key={t.id} className="border-t border-grid">
                       <td className="py-2 pr-2 tabular-nums">{fmtDate(t.date)}</td>
@@ -240,6 +250,9 @@ export default function InvoiceDetail({
                       </td>
                       <td className="py-2 pr-2 text-right font-bold tabular-nums">
                         {amount !== null ? currency(amount) : "—"}
+                      </td>
+                      <td className="py-2 pr-2 text-right tabular-nums">
+                        {tow !== null ? currency(tow) : "—"}
                       </td>
                       <td className="py-2 pl-2 text-right whitespace-nowrap">
                         <Link

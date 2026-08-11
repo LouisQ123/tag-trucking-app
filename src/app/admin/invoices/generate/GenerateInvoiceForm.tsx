@@ -26,6 +26,9 @@ function fmtDate(iso: string): string {
 function currency(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
+function towAmount(t: InvoiceTicket): number | null {
+  return t.tow_rate !== null && t.tow_count !== null ? t.tow_rate * t.tow_count : null;
+}
 
 export default function GenerateInvoiceForm({
   clients,
@@ -87,7 +90,10 @@ export default function GenerateInvoiceForm({
   }
 
   const selectedTickets = sortedTickets.filter((t) => selected.has(t.id));
-  const total = selectedTickets.reduce((sum, t) => sum + (t.rate !== null ? (t.total_hours ?? 0) * t.rate : 0), 0);
+  const total = selectedTickets.reduce(
+    (sum, t) => sum + (t.rate !== null ? (t.total_hours ?? 0) * t.rate : 0) + (towAmount(t) ?? 0),
+    0
+  );
 
   async function handleGenerate() {
     setError(null);
@@ -144,6 +150,7 @@ export default function GenerateInvoiceForm({
             truckNumber: t.truck_number,
             hours: t.total_hours ?? 0,
             rate: t.rate,
+            towAmount: towAmount(t),
           })),
         });
 
@@ -239,7 +246,7 @@ export default function GenerateInvoiceForm({
       <Card title={`Tickets to Bill (${selectedTickets.length} of ${sortedTickets.length})`}>
         {sortedTickets.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm min-w-[780px]">
               <thead>
                 <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                   <th className="py-2 pr-2 w-8"></th>
@@ -250,11 +257,13 @@ export default function GenerateInvoiceForm({
                   <th className="py-2 pr-2 text-right">Hours</th>
                   <th className="py-2 pr-2 text-right">Rate</th>
                   <th className="py-2 pr-2 text-right">Amount</th>
+                  <th className="py-2 pr-2 text-right">Tow</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedTickets.map((t) => {
                   const amount = t.rate !== null ? (t.total_hours ?? 0) * t.rate : null;
+                  const tow = towAmount(t);
                   const isMatch = client && t.client === client.name;
                   return (
                     <tr key={t.id} className="border-t border-grid">
@@ -275,6 +284,9 @@ export default function GenerateInvoiceForm({
                       </td>
                       <td className="py-2 pr-2 text-right font-bold tabular-nums">
                         {amount !== null ? currency(amount) : "—"}
+                      </td>
+                      <td className="py-2 pr-2 text-right tabular-nums">
+                        {tow !== null ? currency(tow) : "—"}
                       </td>
                     </tr>
                   );

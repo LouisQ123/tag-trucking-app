@@ -485,6 +485,12 @@ alter table public.invoice_tickets add column if not exists rate numeric(8, 2) c
 alter table public.invoice_tickets add column if not exists invoice_id uuid references public.invoices (id) on delete set null;
 create index if not exists invoice_tickets_invoice_idx on public.invoice_tickets (invoice_id);
 
+-- invoice_tickets: tow reimbursement — a per-tow flat rate times how many
+-- tows happened on this ticket, kept separate from the hourly Amount and
+-- broken out as its own column on the invoice.
+alter table public.invoice_tickets add column if not exists tow_rate numeric(8, 2) check (tow_rate is null or tow_rate >= 0);
+alter table public.invoice_tickets add column if not exists tow_count integer check (tow_count is null or tow_count >= 0);
+
 -- ============================================================
 -- 13. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
