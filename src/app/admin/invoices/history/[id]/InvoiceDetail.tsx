@@ -49,6 +49,7 @@ export default function InvoiceDetail({
       sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0) + (towAmount(t) ?? 0),
     0
   );
+  const hasTow = rows.some((t) => towAmount(t) !== null);
 
   async function handleRemove(ticketId: string) {
     if (!confirm("Remove this ticket from the invoice? It stays on file and can be billed on a future invoice.")) return;
@@ -231,7 +232,7 @@ export default function InvoiceDetail({
                   <th className="py-2 pr-2 text-right">Hours</th>
                   <th className="py-2 pr-2 text-right">Rate</th>
                   <th className="py-2 pr-2 text-right">Amount</th>
-                  <th className="py-2 pr-2 text-right">Tow</th>
+                  {hasTow && <th className="py-2 pr-2 text-right">Tow</th>}
                   <th className="py-2 pl-2"></th>
                 </tr>
               </thead>
@@ -251,9 +252,11 @@ export default function InvoiceDetail({
                       <td className="py-2 pr-2 text-right font-bold tabular-nums">
                         {amount !== null ? currency(amount) : "—"}
                       </td>
-                      <td className="py-2 pr-2 text-right tabular-nums">
-                        {tow !== null ? currency(tow) : "—"}
-                      </td>
+                      {hasTow && (
+                        <td className="py-2 pr-2 text-right tabular-nums">
+                          {tow !== null ? currency(tow) : "—"}
+                        </td>
+                      )}
                       <td className="py-2 pl-2 text-right whitespace-nowrap">
                         <Link
                           href={`/admin/invoices/${t.id}`}

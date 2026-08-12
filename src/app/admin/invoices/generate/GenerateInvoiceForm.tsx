@@ -89,6 +89,7 @@ export default function GenerateInvoiceForm({
     });
   }
 
+  const hasTow = sortedTickets.some((t) => towAmount(t) !== null);
   const selectedTickets = sortedTickets.filter((t) => selected.has(t.id));
   const total = selectedTickets.reduce(
     (sum, t) => sum + (t.rate !== null ? (t.total_hours ?? 0) * t.rate : 0) + (towAmount(t) ?? 0),
@@ -257,7 +258,7 @@ export default function GenerateInvoiceForm({
                   <th className="py-2 pr-2 text-right">Hours</th>
                   <th className="py-2 pr-2 text-right">Rate</th>
                   <th className="py-2 pr-2 text-right">Amount</th>
-                  <th className="py-2 pr-2 text-right">Tow</th>
+                  {hasTow && <th className="py-2 pr-2 text-right">Tow</th>}
                 </tr>
               </thead>
               <tbody>
@@ -285,9 +286,11 @@ export default function GenerateInvoiceForm({
                       <td className="py-2 pr-2 text-right font-bold tabular-nums">
                         {amount !== null ? currency(amount) : "—"}
                       </td>
-                      <td className="py-2 pr-2 text-right tabular-nums">
-                        {tow !== null ? currency(tow) : "—"}
-                      </td>
+                      {hasTow && (
+                        <td className="py-2 pr-2 text-right tabular-nums">
+                          {tow !== null ? currency(tow) : "—"}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

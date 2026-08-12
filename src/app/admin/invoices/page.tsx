@@ -36,6 +36,7 @@ export default async function InvoicesPage() {
   ]);
   const tickets = (data as InvoiceTicket[]) ?? [];
   const invoiceNoById = new Map(((invoiceRows ?? []) as { id: string; invoice_no: string }[]).map((i) => [i.id, i.invoice_no]));
+  const hasTow = tickets.some((t) => t.tow_rate !== null && t.tow_count !== null);
 
   return (
     <main className="max-w-6xl mx-auto px-5 py-7 flex flex-col gap-5">
@@ -68,7 +69,7 @@ export default async function InvoicesPage() {
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1420px]">
+          <table className={`w-full text-sm ${hasTow ? "min-w-[1420px]" : "min-w-[1340px]"}`}>
             <thead>
               <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                 <th className="px-4 py-2.5">Day</th>
@@ -83,7 +84,7 @@ export default async function InvoicesPage() {
                 <th className="px-4 py-2.5">Total Hrs</th>
                 <th className="px-4 py-2.5">Rate</th>
                 <th className="px-4 py-2.5">Loads</th>
-                <th className="px-4 py-2.5">Tow</th>
+                {hasTow && <th className="px-4 py-2.5">Tow</th>}
                 <th className="px-4 py-2.5">Status</th>
               </tr>
             </thead>
@@ -110,11 +111,13 @@ export default async function InvoicesPage() {
                       {t.rate !== null ? `$${t.rate.toFixed(2)}` : "—"}
                     </td>
                     <td className="px-4 py-3 tabular-nums">{t.loads ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink-2 tabular-nums">
-                      {t.tow_rate !== null && t.tow_count !== null
-                        ? `$${(t.tow_rate * t.tow_count).toFixed(2)}`
-                        : "—"}
-                    </td>
+                    {hasTow && (
+                      <td className="px-4 py-3 text-ink-2 tabular-nums">
+                        {t.tow_rate !== null && t.tow_count !== null
+                          ? `$${(t.tow_rate * t.tow_count).toFixed(2)}`
+                          : "—"}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       {invoiceNo ? (
                         <Link
@@ -133,7 +136,7 @@ export default async function InvoicesPage() {
               })}
               {!tickets.length && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-10 text-center text-ink-2">
+                  <td colSpan={hasTow ? 14 : 13} className="px-4 py-10 text-center text-ink-2">
                     No invoice tickets yet. Create your first one.
                   </td>
                 </tr>
