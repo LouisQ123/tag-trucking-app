@@ -56,7 +56,10 @@ export default function TicketsTable({
     const filtered = q ? tickets.filter((t) => (t.ticket_no ?? "").toLowerCase().includes(q)) : tickets;
     const rows = [...filtered];
     rows.sort((a, b) => {
-      const cmp = sortKey === "date" ? a.date.localeCompare(b.date) : a.client.localeCompare(b.client);
+      // Sorting by client groups tickets for the same client together;
+      // within a group, order by date so it reads chronologically.
+      let cmp = sortKey === "date" ? a.date.localeCompare(b.date) : a.client.localeCompare(b.client);
+      if (cmp === 0 && sortKey === "client") cmp = a.date.localeCompare(b.date);
       return sortDir === "asc" ? cmp : -cmp;
     });
     return rows;

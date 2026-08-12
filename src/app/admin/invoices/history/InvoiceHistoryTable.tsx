@@ -45,7 +45,10 @@ export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
     const filtered = q ? rows.filter((r) => r.invoice_no.toLowerCase().includes(q)) : rows;
     const list = [...filtered];
     list.sort((a, b) => {
-      const cmp = sortKey === "date" ? a.date.localeCompare(b.date) : a.clientName.localeCompare(b.clientName);
+      // Sorting by client groups invoices for the same client together;
+      // within a group, order by date so it reads chronologically.
+      let cmp = sortKey === "date" ? a.date.localeCompare(b.date) : a.clientName.localeCompare(b.clientName);
+      if (cmp === 0 && sortKey === "client") cmp = a.date.localeCompare(b.date);
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
