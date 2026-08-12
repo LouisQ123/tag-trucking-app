@@ -221,12 +221,6 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
   const hasTow = input.lines.some((l) => l.towAmount !== null);
   const head = ["Date", "Ticket #", "Truck #", "Hours", "Rate", "Amount"];
   if (hasTow) head.push("Tow");
-  const columnStyles: Record<number, { halign: "right" }> = {
-    3: { halign: "right" },
-    4: { halign: "right" },
-    5: { halign: "right" },
-  };
-  if (hasTow) columnStyles[6] = { halign: "right" };
 
   autoTable(pdf, {
     startY: y,
@@ -247,7 +241,6 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
     styles: { font: "helvetica", fontSize: 9, textColor: PDF_INK, cellPadding: 6, lineColor: PDF_BORDER },
     headStyles: { fillColor: PDF_MAROON, textColor: "#ffffff", fontStyle: "bold" },
     alternateRowStyles: { fillColor: PDF_STRIPE },
-    columnStyles,
     didDrawPage: () => {
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(8);
