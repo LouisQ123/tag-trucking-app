@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createInvoiceRecord } from "@/lib/actions/invoices";
+import { saveInvoice } from "@/lib/actions/invoices";
 import { downloadInvoicePdf } from "@/lib/invoicePdf";
 import DateInput from "@/components/DateInput";
-import type { Client, InvoiceTicket } from "@/lib/types/database";
+import type { Client, Invoice, InvoiceTicket } from "@/lib/types/database";
 
 function todayISO() {
   const d = new Date();
@@ -34,21 +34,33 @@ export default function GenerateInvoiceForm({
   clients,
   tickets,
   nextInvoiceNo,
+  draft,
+  draftTicketIds,
 }: {
   clients: Client[];
   tickets: InvoiceTicket[];
   nextInvoiceNo: string;
+  draft?: Invoice | null;
+  draftTicketIds?: string[];
 }) {
   const router = useRouter();
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
-  const [invoiceNo, setInvoiceNo] = useState(nextInvoiceNo);
-  const [date, setDate] = useState(todayISO());
-  const [customer, setCustomer] = useState("");
-  const [forDescription, setForDescription] = useState("Dump Truck Rental");
-  const [terms, setTerms] = useState("Net 30 days");
+  const [clientId, setClientId] = useState(draft?.client_id ?? clients[0]?.id ?? "");
+  const [invoiceNo, setInvoiceNo] = useState(draft?.invoice_no ?? nextInvoiceNo);
+  const [date, setDate] = useState(draft?.date ?? todayISO());
+  const [customer, setCustomer] = useState(draft?.customer ?? "");
+  const [forDescription, setForDescription] = useState(draft?.for_description ?? "Dump Truck Rental");
+  const [terms, setTerms] = useState(draft?.terms ?? "Net 30 days");
+  // Tracks which invoice row we're saving to — set once a draft is first
+  // saved (or immediately if resuming one), so every subsequent Save Draft
+  // or Send updates that same row instead of creating duplicates.
+  const [currentInvoiceId, setCurrentInvoiceId] = useState<string | undefined>(draft?.id);
+
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ invoiceNo: string; total: number } | null>(null);
+  const [success, setSuccess] = useState<{ type: "draft" | "sent"; invoiceNo: string; total: number } | null>(
+    null
+  );
   const [lastGenerated, setLastGenerated] = useState<(() => Promise<void>) | null>(null);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
@@ -69,8 +81,10 @@ export default function GenerateInvoiceForm({
     [tickets, client]
   );
 
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(tickets.filter((t) => client && t.client === client.name).map((t) => t.id))
+  const [selected, setSelected] = useState<Set<string>>(() =>
+    draft
+      ? new Set(draftTicketIds ?? [])
+      : new Set(tickets.filter((t) => client && t.client === client.name).map((t) => t.id))
   );
 
   function onClientChange(id: string) {
@@ -96,6 +110,45 @@ export default function GenerateInvoiceForm({
     0
   );
 
+  async function handleSaveDraft() {
+    setError(null);
+    if (!client) {
+      setError("Pick a client.");
+      return;
+    }
+    if (!invoiceNo.trim()) {
+      setError("Invoice number is required.");
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      const result = await saveInvoice({
+        invoiceId: currentInvoiceId,
+        clientId: client.id,
+        invoiceNo: invoiceNo.trim(),
+        date,
+        customer: customer.trim(),
+        forDescription: forDescription.trim(),
+        terms: terms.trim() || "Net 30 days",
+        ticketIds: selectedTickets.map((t) => t.id),
+        total,
+        status: "draft",
+      });
+
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+
+      setCurrentInvoiceId(result.id);
+      setSuccess({ type: "draft", invoiceNo: invoiceNo.trim(), total });
+      router.refresh();
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
   async function handleGenerate() {
     setError(null);
     if (!client) {
@@ -113,7 +166,8 @@ export default function GenerateInvoiceForm({
 
     setSubmitting(true);
     try {
-      const result = await createInvoiceRecord({
+      const result = await saveInvoice({
+        invoiceId: currentInvoiceId,
         clientId: client.id,
         invoiceNo: invoiceNo.trim(),
         date,
@@ -122,6 +176,7 @@ export default function GenerateInvoiceForm({
         terms: terms.trim() || "Net 30 days",
         ticketIds: selectedTickets.map((t) => t.id),
         total,
+        status: "pending",
       });
 
       if ("error" in result) {
@@ -157,7 +212,10 @@ export default function GenerateInvoiceForm({
 
       await download();
       setLastGenerated(() => download);
-      setSuccess({ invoiceNo: invoiceNo.trim(), total });
+      setSuccess({ type: "sent", invoiceNo: invoiceNo.trim(), total });
+      // This invoice is finalized now — a further Save Draft or Send in this
+      // session should start a new invoice, not keep editing this one.
+      setCurrentInvoiceId(undefined);
       // Advance the field for the next invoice in this session — router.refresh()
       // re-fetches nextInvoiceNo from the server, but a prop change alone
       // doesn't reset state already initialized from it.
@@ -178,10 +236,10 @@ export default function GenerateInvoiceForm({
           {error}
         </div>
       )}
-      {success && (
+      {success && success.type === "sent" && (
         <div className="rounded-lg bg-good/10 border border-good/30 text-sm font-semibold text-good px-4 py-3 flex items-center justify-between gap-3">
           <span>
-            Invoice #{success.invoiceNo} created — {currency(success.total)}.
+            Invoice #{success.invoiceNo} sent — {currency(success.total)}.
           </span>
           <button
             type="button"
@@ -190,6 +248,12 @@ export default function GenerateInvoiceForm({
           >
             Download again
           </button>
+        </div>
+      )}
+      {success && success.type === "draft" && (
+        <div className="rounded-lg bg-accent-dim border border-accent/30 text-sm font-semibold text-accent px-4 py-3">
+          Draft #{success.invoiceNo} saved — {currency(success.total)}. Come back anytime from Invoice History to
+          finish it.
         </div>
       )}
 
@@ -306,14 +370,22 @@ export default function GenerateInvoiceForm({
         </div>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={handleSaveDraft}
+          disabled={savingDraft || submitting}
+          className="rounded-lg border border-border text-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
+        >
+          {savingDraft ? "Saving…" : "Save Draft"}
+        </button>
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={submitting || !selectedTickets.length}
+          disabled={submitting || savingDraft || !selectedTickets.length}
           className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
         >
-          {submitting ? "Generating…" : "Generate Invoice PDF"}
+          {submitting ? "Sending…" : "Generate Invoice PDF"}
         </button>
       </div>
     </div>

@@ -18,10 +18,13 @@ export default async function EditInvoiceTicketPage({ params }: { params: Promis
   if (ticket.invoice_id) {
     const { data: invoice } = await supabase
       .from("invoices")
-      .select("invoice_no")
+      .select("invoice_no, status")
       .eq("id", ticket.invoice_id)
       .single();
-    if (invoice) invoicedLabel = `Invoice #${invoice.invoice_no}`;
+    if (invoice) {
+      invoicedLabel =
+        invoice.status === "draft" ? `Draft Invoice #${invoice.invoice_no}` : `Invoice #${invoice.invoice_no}`;
+    }
   }
 
   const allRows = (rows ?? []) as { client: string; location_project: string | null }[];

@@ -79,7 +79,14 @@ export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
             {sorted.map((inv) => (
               <tr key={inv.id} className="border-t border-grid hover:bg-surface-2">
                 <td className="px-4 py-3">
-                  <Link href={`/admin/invoices/history/${inv.id}`} className="font-semibold hover:underline">
+                  <Link
+                    href={
+                      inv.status === "draft"
+                        ? `/admin/invoices/generate?draft=${inv.id}`
+                        : `/admin/invoices/history/${inv.id}`
+                    }
+                    className="font-semibold hover:underline"
+                  >
                     #{inv.invoice_no}
                   </Link>
                 </td>
@@ -92,6 +99,11 @@ export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-good">
                       <span className="w-1.5 h-1.5 rounded-full bg-current" />
                       Paid{inv.check_number ? ` · Chk #${inv.check_number}` : ""}
+                    </span>
+                  ) : inv.status === "draft" ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-muted">
+                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                      Draft
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-warning">

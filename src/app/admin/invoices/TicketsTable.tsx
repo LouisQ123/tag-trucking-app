@@ -31,11 +31,11 @@ type SortDir = "asc" | "desc";
 
 export default function TicketsTable({
   tickets,
-  invoiceNoById,
+  invoiceById,
   hasTow,
 }: {
   tickets: InvoiceTicket[];
-  invoiceNoById: Map<string, string>;
+  invoiceById: Map<string, { invoiceNo: string; status: string }>;
   hasTow: boolean;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -98,7 +98,7 @@ export default function TicketsTable({
           </thead>
           <tbody>
             {sorted.map((t) => {
-              const invoiceNo = t.invoice_id ? invoiceNoById.get(t.invoice_id) : null;
+              const linkedInvoice = t.invoice_id ? invoiceById.get(t.invoice_id) : null;
               return (
                 <tr key={t.id} className="border-t border-grid hover:bg-surface-2">
                   <td className="px-4 py-3 text-ink-2">{dayOfWeek(t.date)}</td>
@@ -127,14 +127,23 @@ export default function TicketsTable({
                     </td>
                   )}
                   <td className="px-4 py-3">
-                    {invoiceNo ? (
-                      <Link
-                        href={`/admin/invoices/history/${t.invoice_id}`}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-good hover:underline"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                        #{invoiceNo}
-                      </Link>
+                    {linkedInvoice ? (
+                      linkedInvoice.status === "draft" ? (
+                        <Link
+                          href={`/admin/invoices/generate?draft=${t.invoice_id}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-warning hover:underline"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                          Draft #{linkedInvoice.invoiceNo}
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/admin/invoices/history/${t.invoice_id}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-good hover:underline"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />#{linkedInvoice.invoiceNo}
+                        </Link>
+                      )
                     ) : (
                       <span className="text-[11px] font-semibold text-muted">Not invoiced</span>
                     )}

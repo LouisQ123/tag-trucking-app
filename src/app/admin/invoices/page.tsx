@@ -11,10 +11,15 @@ export default async function InvoicesPage() {
       .select("*")
       .order("date", { ascending: false })
       .order("created_at", { ascending: false }),
-    supabase.from("invoices").select("id, invoice_no"),
+    supabase.from("invoices").select("id, invoice_no, status"),
   ]);
   const tickets = (data as InvoiceTicket[]) ?? [];
-  const invoiceNoById = new Map(((invoiceRows ?? []) as { id: string; invoice_no: string }[]).map((i) => [i.id, i.invoice_no]));
+  const invoiceById = new Map(
+    ((invoiceRows ?? []) as { id: string; invoice_no: string; status: string }[]).map((i) => [
+      i.id,
+      { invoiceNo: i.invoice_no, status: i.status },
+    ])
+  );
   const hasTow = tickets.some((t) => t.tow_rate !== null && t.tow_count !== null);
 
   return (
@@ -46,7 +51,7 @@ export default async function InvoicesPage() {
         </div>
       </div>
 
-      <TicketsTable tickets={tickets} invoiceNoById={invoiceNoById} hasTow={hasTow} />
+      <TicketsTable tickets={tickets} invoiceById={invoiceById} hasTow={hasTow} />
     </main>
   );
 }

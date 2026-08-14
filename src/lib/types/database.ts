@@ -71,7 +71,7 @@ export interface Client {
   created_at: string;
 }
 
-export type InvoiceStatus = "pending" | "paid";
+export type InvoiceStatus = "draft" | "pending" | "paid";
 
 export interface Invoice {
   id: string;

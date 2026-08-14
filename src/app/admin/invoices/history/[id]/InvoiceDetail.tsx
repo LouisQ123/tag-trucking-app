@@ -74,7 +74,7 @@ export default function InvoiceDetail({
     }
   }
 
-  async function handleSaveStatus(nextStatus: InvoiceStatus) {
+  async function handleSaveStatus(nextStatus: "pending" | "paid") {
     setStatus(nextStatus);
     setStatusSaved(false);
     setSavingStatus(true);

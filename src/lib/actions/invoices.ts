@@ -177,7 +177,8 @@ export async function updateInvoiceStatus(invoiceId: string, status: "pending" |
   revalidatePath(`/admin/invoices/history/${invoiceId}`);
 }
 
-export interface GenerateInvoiceInput {
+export interface SaveInvoiceInput {
+  invoiceId?: string; // present when updating an existing draft
   clientId: string;
   invoiceNo: string;
   date: string;
@@ -186,43 +187,64 @@ export interface GenerateInvoiceInput {
   terms: string;
   ticketIds: string[];
   total: number;
+  status: "draft" | "pending";
 }
 
-export async function createInvoiceRecord(
-  input: GenerateInvoiceInput
-): Promise<{ id: string } | { error: string }> {
+// Backs both "Save Draft" (status: "draft", can be revisited and changed
+// later) and "Generate Invoice PDF" (status: "pending", the finalized send)
+// — the same function either updates a draft in place or inserts a new
+// invoice, so re-saving a draft never creates duplicate rows.
+export async function saveInvoice(input: SaveInvoiceInput): Promise<{ id: string } | { error: string }> {
   await requireAdmin();
 
-  if (!input.clientId || !input.invoiceNo || !input.date || !input.ticketIds.length) {
-    return { error: "Client, invoice number, date, and at least one ticket are required." };
+  if (!input.clientId || !input.invoiceNo || !input.date) {
+    return { error: "Client, invoice number, and date are required." };
+  }
+  if (input.status === "pending" && !input.ticketIds.length) {
+    return { error: "Select at least one ticket to bill." };
   }
 
   const supabase = await createClient();
-  const { data: invoice, error: invoiceError } = await supabase
-    .from("invoices")
-    .insert({
-      invoice_no: input.invoiceNo,
-      date: input.date,
-      client_id: input.clientId,
-      customer: input.customer || null,
-      for_description: input.forDescription || null,
-      terms: input.terms || "Net 30 days",
-      total: input.total,
-    })
-    .select("id")
-    .single();
+  const fields = {
+    invoice_no: input.invoiceNo,
+    date: input.date,
+    client_id: input.clientId,
+    customer: input.customer || null,
+    for_description: input.forDescription || null,
+    terms: input.terms || "Net 30 days",
+    total: input.total,
+    status: input.status,
+  };
 
-  if (invoiceError || !invoice) {
-    return { error: invoiceError?.message || "Couldn't create the invoice. Try again." };
+  let invoiceId = input.invoiceId;
+
+  if (invoiceId) {
+    const { error } = await supabase.from("invoices").update(fields).eq("id", invoiceId);
+    if (error) return { error: error.message };
+
+    // Full-replace the ticket links — same pattern as replacing a sheet's
+    // loads on edit — rather than diffing which tickets were added/removed.
+    const { error: unlinkError } = await supabase
+      .from("invoice_tickets")
+      .update({ invoice_id: null })
+      .eq("invoice_id", invoiceId);
+    if (unlinkError) return { error: unlinkError.message };
+  } else {
+    const { data: invoice, error } = await supabase.from("invoices").insert(fields).select("id").single();
+    if (error || !invoice) return { error: error?.message || "Couldn't save the invoice. Try again." };
+    invoiceId = invoice.id as string;
   }
 
-  const { error: ticketsError } = await supabase
-    .from("invoice_tickets")
-    .update({ invoice_id: invoice.id })
-    .in("id", input.ticketIds);
-
-  if (ticketsError) return { error: ticketsError.message };
+  if (input.ticketIds.length) {
+    const { error: linkError } = await supabase
+      .from("invoice_tickets")
+      .update({ invoice_id: invoiceId })
+      .in("id", input.ticketIds);
+    if (linkError) return { error: linkError.message };
+  }
 
   revalidatePath("/admin/invoices");
-  return { id: invoice.id as string };
+  revalidatePath("/admin/invoices/history");
+  revalidatePath(`/admin/invoices/history/${invoiceId}`);
+  return { id: invoiceId as string };
 }
