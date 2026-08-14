@@ -10,12 +10,14 @@ export default async function InvoiceHistoryDetailPage({ params }: { params: Pro
   const { data: invoice } = await supabase.from("invoices").select("*").eq("id", id).single();
   if (!invoice) notFound();
 
-  const [{ data: client }, { data: tickets }] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", invoice.client_id).single(),
+  const [{ data: clients }, { data: tickets }, { data: availableTickets }] = await Promise.all([
+    supabase.from("clients").select("*").order("name"),
     supabase.from("invoice_tickets").select("*").eq("invoice_id", id).order("date"),
+    supabase.from("invoice_tickets").select("*").is("invoice_id", null).order("date"),
   ]);
 
-  if (!client) notFound();
+  const clientRows = (clients as Client[]) ?? [];
+  if (!clientRows.some((c) => c.id === invoice.client_id)) notFound();
 
   return (
     <main className="max-w-4xl mx-auto px-5 py-8">
@@ -25,8 +27,9 @@ export default async function InvoiceHistoryDetailPage({ params }: { params: Pro
       </div>
       <InvoiceDetail
         invoice={invoice as Invoice}
-        client={client as Client}
+        clients={clientRows}
         tickets={(tickets as InvoiceTicket[]) ?? []}
+        availableTickets={(availableTickets as InvoiceTicket[]) ?? []}
       />
     </main>
   );

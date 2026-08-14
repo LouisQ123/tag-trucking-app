@@ -3,8 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { removeTicketFromInvoice, deleteInvoiceRecord, updateInvoiceStatus } from "@/lib/actions/invoices";
+import {
+  removeTicketFromInvoice,
+  deleteInvoiceRecord,
+  updateInvoiceStatus,
+  updateInvoiceFields,
+  addTicketsToInvoice,
+} from "@/lib/actions/invoices";
 import { downloadInvoicePdf } from "@/lib/invoicePdf";
+import DateInput from "@/components/DateInput";
 import type { Client, Invoice, InvoiceStatus, InvoiceTicket } from "@/lib/types/database";
 
 function parseISO(iso: string): Date | null {
@@ -26,15 +33,18 @@ function towAmount(t: InvoiceTicket): number | null {
 
 export default function InvoiceDetail({
   invoice,
-  client,
+  clients,
   tickets,
+  availableTickets,
 }: {
   invoice: Invoice;
-  client: Client;
+  clients: Client[];
   tickets: InvoiceTicket[];
+  availableTickets: InvoiceTicket[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState(tickets);
+  const [pool, setPool] = useState(availableTickets);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [deletingInvoice, setDeletingInvoice] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -44,6 +54,22 @@ export default function InvoiceDetail({
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusSaved, setStatusSaved] = useState(false);
 
+  const [clientId, setClientId] = useState(invoice.client_id);
+  const [invoiceNo, setInvoiceNo] = useState(invoice.invoice_no);
+  const [date, setDate] = useState(invoice.date);
+  const [customer, setCustomer] = useState(invoice.customer ?? "");
+  const [forDescription, setForDescription] = useState(invoice.for_description ?? "");
+  const [terms, setTerms] = useState(invoice.terms);
+  const [savingFields, setSavingFields] = useState(false);
+  const [fieldsSaved, setFieldsSaved] = useState(false);
+  const [fieldsError, setFieldsError] = useState<string | null>(null);
+
+  const [showAddTickets, setShowAddTickets] = useState(false);
+  const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
+  const [addingTickets, setAddingTickets] = useState(false);
+
+  const client = clients.find((c) => c.id === clientId) ?? clients[0];
+
   const total = rows.reduce(
     (sum, t) =>
       sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0) + (towAmount(t) ?? 0),
@@ -51,12 +77,68 @@ export default function InvoiceDetail({
   );
   const hasTow = rows.some((t) => towAmount(t) !== null);
 
+  async function handleSaveFields() {
+    setFieldsError(null);
+    if (!clientId || !invoiceNo.trim() || !date) {
+      setFieldsError("Client, invoice number, and date are required.");
+      return;
+    }
+    setFieldsSaved(false);
+    setSavingFields(true);
+    try {
+      const result = await updateInvoiceFields(invoice.id, {
+        clientId,
+        invoiceNo: invoiceNo.trim(),
+        date,
+        customer: customer.trim(),
+        forDescription: forDescription.trim(),
+        terms: terms.trim() || "Net 30 days",
+      });
+      if ("error" in result) {
+        setFieldsError(result.error);
+        return;
+      }
+      setFieldsSaved(true);
+      router.refresh();
+    } finally {
+      setSavingFields(false);
+    }
+  }
+
+  function toggleAddSelect(id: string) {
+    setSelectedToAdd((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleAddTickets() {
+    if (!selectedToAdd.size) return;
+    setAddingTickets(true);
+    try {
+      const ids = Array.from(selectedToAdd);
+      await addTicketsToInvoice(invoice.id, ids);
+      const added = pool.filter((t) => selectedToAdd.has(t.id));
+      setRows((r) => [...r, ...added].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
+      setPool((p) => p.filter((t) => !selectedToAdd.has(t.id)));
+      setSelectedToAdd(new Set());
+      setShowAddTickets(false);
+      router.refresh();
+    } finally {
+      setAddingTickets(false);
+    }
+  }
+
   async function handleRemove(ticketId: string) {
     if (!confirm("Remove this ticket from the invoice? It stays on file and can be billed on a future invoice.")) return;
     setRemovingId(ticketId);
     try {
       await removeTicketFromInvoice(ticketId);
+      const removed = rows.find((t) => t.id === ticketId);
       setRows((r) => r.filter((t) => t.id !== ticketId));
+      if (removed) setPool((p) => [...p, removed]);
       router.refresh();
     } finally {
       setRemovingId(null);
@@ -64,7 +146,7 @@ export default function InvoiceDetail({
   }
 
   async function handleDeleteInvoice() {
-    if (!confirm(`Delete invoice #${invoice.invoice_no}? Its tickets stay on file and become billable again.`)) return;
+    if (!confirm(`Delete invoice #${invoiceNo}? Its tickets stay on file and become billable again.`)) return;
     setDeletingInvoice(true);
     try {
       await deleteInvoiceRecord(invoice.id);
@@ -104,8 +186,8 @@ export default function InvoiceDetail({
     setDownloading(true);
     try {
       await downloadInvoicePdf({
-        invoiceNo: invoice.invoice_no,
-        date: invoice.date,
+        invoiceNo,
+        date,
         client: {
           name: client.name,
           company: client.company,
@@ -115,9 +197,9 @@ export default function InvoiceDetail({
           fax: client.fax,
           email: client.email,
         },
-        customer: invoice.customer ?? "",
-        forDescription: invoice.for_description ?? "",
-        terms: invoice.terms,
+        customer,
+        forDescription,
+        terms,
         lines: rows.map((t) => ({
           date: t.date,
           ticketNo: t.ticket_no,
@@ -135,33 +217,57 @@ export default function InvoiceDetail({
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
-        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-2">Bill To</p>
-            <p className="font-bold">{client.name}</p>
-            {client.company && <p className="font-semibold text-ink-2">{client.company}</p>}
-            <p className="text-ink-2">
-              {[client.address_line1, client.city_state_zip].filter(Boolean).join(", ") || "No address on file"}
-            </p>
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-3.5">Invoice Details</p>
+        {fieldsError && (
+          <div className="rounded-lg bg-critical/10 border border-critical/30 text-sm font-semibold text-critical px-4 py-3 mb-3.5">
+            {fieldsError}
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">Date</p>
-              <p className="font-semibold">{fmtDate(invoice.date)}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">Terms</p>
-              <p className="font-semibold">{invoice.terms}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">Customer</p>
-              <p className="font-semibold">{invoice.customer || "—"}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">For</p>
-              <p className="font-semibold">{invoice.for_description || "—"}</p>
-            </div>
-          </div>
+        )}
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3.5">
+          <Field label="Client">
+            <select className="input" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Invoice #">
+            <input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} className="input" />
+          </Field>
+          <Field label="Date">
+            <DateInput name="invoice_date" defaultValue={date} onChange={setDate} />
+          </Field>
+          <Field label="Terms">
+            <input value={terms} onChange={(e) => setTerms(e.target.value)} className="input" />
+          </Field>
+          <Field label="Customer">
+            <input
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              placeholder="Optional — the actual job customer, if different"
+              className="input"
+            />
+          </Field>
+          <Field label="For">
+            <input value={forDescription} onChange={(e) => setForDescription(e.target.value)} className="input" />
+          </Field>
+        </div>
+        <p className="text-[12.5px] text-ink-2 mt-3">
+          {[client.company, client.address_line1, client.city_state_zip].filter(Boolean).join(", ") ||
+            "No address on file"}
+        </p>
+        <div className="flex items-center gap-3 mt-3.5 pt-3.5 border-t border-grid">
+          <button
+            type="button"
+            onClick={handleSaveFields}
+            disabled={savingFields}
+            className="rounded-lg border border-border text-ink font-bold text-sm px-4 py-2.5 disabled:opacity-60"
+          >
+            {savingFields ? "Saving…" : "Save Changes"}
+          </button>
+          {fieldsSaved && <span className="text-sm font-semibold text-good">Saved.</span>}
         </div>
       </div>
 
@@ -218,9 +324,63 @@ export default function InvoiceDetail({
       </div>
 
       <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-3.5">
-          Tickets ({rows.length})
-        </p>
+        <div className="flex items-center justify-between mb-3.5">
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">Tickets ({rows.length})</p>
+          <button
+            type="button"
+            onClick={() => setShowAddTickets((v) => !v)}
+            className="text-xs font-bold text-accent hover:underline"
+          >
+            {showAddTickets ? "Cancel" : "+ Add Tickets"}
+          </button>
+        </div>
+
+        {showAddTickets && (
+          <div className="mb-4 pb-4 border-b border-grid">
+            {pool.length ? (
+              <>
+                <div className="max-h-64 overflow-y-auto border border-border rounded-lg">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {pool.map((t) => (
+                        <tr
+                          key={t.id}
+                          className="border-t border-grid first:border-t-0 hover:bg-surface-2 cursor-pointer"
+                          onClick={() => toggleAddSelect(t.id)}
+                        >
+                          <td className="py-2 pl-3 pr-2 w-8">
+                            <input
+                              type="checkbox"
+                              checked={selectedToAdd.has(t.id)}
+                              onChange={() => toggleAddSelect(t.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </td>
+                          <td className="py-2 pr-2 tabular-nums">{fmtDate(t.date)}</td>
+                          <td className="py-2 pr-2 text-ink-2 tabular-nums">{t.ticket_no ?? "—"}</td>
+                          <td className="py-2 pr-3 font-semibold">{t.client}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end mt-3">
+                  <button
+                    type="button"
+                    onClick={handleAddTickets}
+                    disabled={addingTickets || !selectedToAdd.size}
+                    className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-4 py-2 disabled:opacity-60"
+                  >
+                    {addingTickets ? "Adding…" : `Add ${selectedToAdd.size || ""} Ticket${selectedToAdd.size === 1 ? "" : "s"}`}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-ink-2">No un-invoiced tickets available to add.</p>
+            )}
+          </div>
+        )}
+
         {rows.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[680px]">
@@ -308,6 +468,21 @@ export default function InvoiceDetail({
           {downloading ? "Generating…" : "Download PDF"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 min-w-0 w-full">
+      <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">{label}</label>
+      {children}
     </div>
   );
 }

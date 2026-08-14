@@ -160,6 +160,66 @@ export async function deleteInvoiceRecord(invoiceId: string) {
   revalidatePath("/admin/invoices/history");
 }
 
+export interface UpdateInvoiceFieldsInput {
+  clientId: string;
+  invoiceNo: string;
+  date: string;
+  customer: string;
+  forDescription: string;
+  terms: string;
+}
+
+// Edits an invoice's own fields — client, invoice #, date, customer, for,
+// terms — independent of its status or which tickets are linked to it.
+export async function updateInvoiceFields(
+  invoiceId: string,
+  fields: UpdateInvoiceFieldsInput
+): Promise<{ error: string } | { ok: true }> {
+  await requireAdmin();
+
+  if (!fields.clientId || !fields.invoiceNo || !fields.date) {
+    return { error: "Client, invoice number, and date are required." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("invoices")
+    .update({
+      client_id: fields.clientId,
+      invoice_no: fields.invoiceNo,
+      date: fields.date,
+      customer: fields.customer || null,
+      for_description: fields.forDescription || null,
+      terms: fields.terms || "Net 30 days",
+    })
+    .eq("id", invoiceId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/invoices/history");
+  revalidatePath(`/admin/invoices/history/${invoiceId}`);
+  return { ok: true };
+}
+
+// Adds tickets to an existing invoice — the counterpart to
+// removeTicketFromInvoice, for fixing a ticket left off by mistake.
+export async function addTicketsToInvoice(invoiceId: string, ticketIds: string[]) {
+  await requireAdmin();
+  if (!ticketIds.length) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("invoice_tickets")
+    .update({ invoice_id: invoiceId })
+    .in("id", ticketIds);
+  if (error) throw new Error(error.message);
+
+  await recomputeInvoiceTotal(supabase, invoiceId);
+
+  revalidatePath("/admin/invoices");
+  revalidatePath("/admin/invoices/history");
+  revalidatePath(`/admin/invoices/history/${invoiceId}`);
+}
+
 export async function updateInvoiceStatus(invoiceId: string, status: "pending" | "paid", checkNumber: string) {
   await requireAdmin();
   const supabase = await createClient();
