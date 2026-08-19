@@ -9,6 +9,7 @@ import {
   deleteInvoiceTicket,
   removeTicketScan,
 } from "@/lib/actions/invoices";
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActionState } from "@/lib/actions/auth";
 import { TRUCK_NUMBERS } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
@@ -69,6 +70,7 @@ export default function InvoiceEditor({
   scanUrl?: string | null;
 }) {
   const router = useRouter();
+  const supabaseBrowser = useMemo(() => createSupabaseBrowserClient(), []);
   const [state, formAction, pending] = useActionState(
     ticket ? updateInvoiceTicket : createInvoiceTicket,
     initialState
@@ -78,6 +80,10 @@ export default function InvoiceEditor({
   const [removingScan, setRemovingScan] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [scanTooLarge, setScanTooLarge] = useState(false);
+  const [uploadingScan, setUploadingScan] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingScanPath, setPendingScanPath] = useState<string | null>(null);
+  const [pendingScanName, setPendingScanName] = useState<string | null>(null);
   const hasScan = !!ticket?.scan_path && !scanRemoved;
 
   const [ticketNo, setTicketNo] = useState(ticket?.ticket_no ?? "");
@@ -135,6 +141,9 @@ export default function InvoiceEditor({
       setSaved(true);
       setScanRemoved(false);
       setScanTooLarge(false);
+      setUploadError(null);
+      setPendingScanPath(null);
+      setPendingScanName(null);
       setFileInputKey((k) => k + 1);
       setSaveCount((c) => c + 1);
     }
@@ -160,14 +169,47 @@ export default function InvoiceEditor({
     }
   }
 
-  function onScanChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Uploads straight from the browser to Supabase Storage — Vercel's
+  // serverless functions cap request bodies well under a real phone photo
+  // or scanned PDF, so the file bytes must never round-trip through our
+  // own server. The Server Action only ever receives the resulting path.
+  async function onScanChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file && file.size > MAX_SCAN_BYTES) {
+    if (!file) return;
+
+    if (file.size > MAX_SCAN_BYTES) {
       setScanTooLarge(true);
+      setPendingScanPath(null);
+      setPendingScanName(null);
+      e.target.value = "";
+      return;
+    }
+
+    setScanTooLarge(false);
+    setUploadError(null);
+    setUploadingScan(true);
+    const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+    const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
+    const { error } = await supabaseBrowser.storage.from("ticket-scans").upload(path, file, {
+      contentType: file.type || undefined,
+    });
+    if (error) {
+      setUploadError(error.message);
+      setPendingScanPath(null);
+      setPendingScanName(null);
       e.target.value = "";
     } else {
-      setScanTooLarge(false);
+      setPendingScanPath(path);
+      setPendingScanName(file.name);
     }
+    setUploadingScan(false);
+  }
+
+  function clearPendingScan() {
+    setPendingScanPath(null);
+    setPendingScanName(null);
+    setUploadError(null);
+    setFileInputKey((k) => k + 1);
   }
 
   async function handleRemoveScan() {
@@ -386,16 +428,35 @@ export default function InvoiceEditor({
             <input
               key={fileInputKey}
               type="file"
-              name="scan"
               accept="image/*,application/pdf"
               onChange={onScanChange}
+              disabled={uploadingScan}
               className="input"
             />
           </Field>
+          <input type="hidden" name="scan_path" value={pendingScanPath ?? ""} />
           {scanTooLarge && (
             <p className="text-sm font-semibold text-critical">
               That file is over 20MB — pick a smaller photo or PDF.
             </p>
+          )}
+          {uploadingScan && <p className="text-sm font-semibold text-ink-2">Uploading…</p>}
+          {uploadError && (
+            <p className="text-sm font-semibold text-critical">Upload failed: {uploadError}</p>
+          )}
+          {pendingScanPath && !uploadingScan && (
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-semibold text-good">
+                {pendingScanName} uploaded — will be saved with this ticket.
+              </p>
+              <button
+                type="button"
+                onClick={clearPendingScan}
+                className="text-xs font-bold text-ink-2 hover:text-ink"
+              >
+                Clear
+              </button>
+            </div>
           )}
         </div>
       </Card>
@@ -425,10 +486,10 @@ export default function InvoiceEditor({
           {saved && <span className="text-sm font-semibold text-good">Saved.</span>}
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || uploadingScan}
             className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
           >
-            {pending ? "Saving…" : ticket ? "Save Changes" : "Create Ticket"}
+            {pending ? "Saving…" : uploadingScan ? "Uploading scan…" : ticket ? "Save Changes" : "Create Ticket"}
           </button>
         </div>
       </div>

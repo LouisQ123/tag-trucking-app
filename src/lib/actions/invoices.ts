@@ -67,34 +67,23 @@ function ticketFields(formData: FormData) {
 }
 
 const SCAN_BUCKET = "ticket-scans";
-const MAX_SCAN_BYTES = 20 * 1024 * 1024;
 
-// Uploads the "scan" file field (if one was picked) to storage and points
-// the ticket's scan_path at it, deleting whatever it's replacing so a
-// ticket only ever holds one scan file at a time.
-async function uploadScan(
+// The browser uploads the scan file straight to Storage (see InvoiceEditor)
+// — Vercel's serverless functions cap request bodies well under a real
+// photo/PDF, so the file never passes through this server. This just
+// points the ticket at the path the browser already wrote to, and cleans
+// up whatever it's replacing so a ticket only ever holds one scan file.
+async function applyScanPath(
   supabase: Supabase,
   formData: FormData,
   ticketId: string,
   previousPath?: string | null
 ): Promise<string | null> {
-  const file = formData.get("scan");
-  if (!(file instanceof File) || file.size === 0) return null;
-  if (file.size > MAX_SCAN_BYTES) return "That file is over 20MB — pick a smaller photo or PDF.";
+  const newPath = str(formData, "scan_path");
+  if (!newPath || newPath === previousPath) return null;
 
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const path = `${ticketId}/${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage.from(SCAN_BUCKET).upload(path, file, {
-    contentType: file.type || undefined,
-  });
-  if (uploadError) return uploadError.message;
-
-  const { error: updateError } = await supabase
-    .from("invoice_tickets")
-    .update({ scan_path: path })
-    .eq("id", ticketId);
-  if (updateError) return updateError.message;
+  const { error } = await supabase.from("invoice_tickets").update({ scan_path: newPath }).eq("id", ticketId);
+  if (error) return error.message;
 
   if (previousPath) await supabase.storage.from(SCAN_BUCKET).remove([previousPath]);
   return null;
@@ -114,7 +103,7 @@ export async function createInvoiceTicket(_prev: ActionState, formData: FormData
     .single();
   if (error || !inserted) return { error: error?.message || "Couldn't create the ticket. Try again." };
 
-  const scanError = await uploadScan(supabase, formData, inserted.id as string);
+  const scanError = await applyScanPath(supabase, formData, inserted.id as string);
   if (scanError) {
     // Undo the insert so a failed scan doesn't leave an orphan ticket behind
     // — the user just sees "Create Ticket" fail outright, as expected.
@@ -142,7 +131,7 @@ export async function updateInvoiceTicket(_prev: ActionState, formData: FormData
     .single();
   if (error) return { error: error.message };
 
-  const scanError = await uploadScan(supabase, formData, id, updated?.scan_path);
+  const scanError = await applyScanPath(supabase, formData, id, updated?.scan_path);
   if (scanError) return { error: scanError };
 
   if (updated?.invoice_id) await recomputeInvoiceTotal(supabase, updated.invoice_id);
