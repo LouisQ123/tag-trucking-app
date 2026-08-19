@@ -1,9 +1,14 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createInvoiceTicket, updateInvoiceTicket, deleteInvoiceTicket } from "@/lib/actions/invoices";
+import {
+  createInvoiceTicket,
+  updateInvoiceTicket,
+  deleteInvoiceTicket,
+  removeTicketScan,
+} from "@/lib/actions/invoices";
 import type { ActionState } from "@/lib/actions/auth";
 import { TRUCK_NUMBERS } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
@@ -40,6 +45,10 @@ function computeTotalHours(timeIn: string, timeOut: string, travel: string): num
   return Math.round(hours * 100) / 100;
 }
 
+function isImagePath(path: string): boolean {
+  return /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(path);
+}
+
 const initialState: ActionState = {};
 
 export default function InvoiceEditor({
@@ -48,12 +57,14 @@ export default function InvoiceEditor({
   locationSuggestions,
   clientDefaultRates = {},
   invoicedLabel,
+  scanUrl,
 }: {
   ticket?: InvoiceTicket;
   clientSuggestions: string[];
   locationSuggestions: string[];
   clientDefaultRates?: Record<string, number>;
   invoicedLabel?: string | null;
+  scanUrl?: string | null;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
@@ -61,6 +72,10 @@ export default function InvoiceEditor({
     initialState
   );
   const [removing, setRemoving] = useState(false);
+  const [scanRemoved, setScanRemoved] = useState(false);
+  const [removingScan, setRemovingScan] = useState(false);
+  const [fileInputKey, setFileInputKey] = useState(0);
+  const hasScan = !!ticket?.scan_path && !scanRemoved;
 
   const [ticketNo, setTicketNo] = useState(ticket?.ticket_no ?? "");
   const [date, setDate] = useState(ticket?.date ?? todayISO());
@@ -110,10 +125,24 @@ export default function InvoiceEditor({
 
   const [lastHandledState, setLastHandledState] = useState(state);
   const [saved, setSaved] = useState(false);
+  const [saveCount, setSaveCount] = useState(0);
   if (state !== lastHandledState) {
     setLastHandledState(state);
-    if (!state.error) setSaved(true);
+    if (!state.error) {
+      setSaved(true);
+      setScanRemoved(false);
+      setFileInputKey((k) => k + 1);
+      setSaveCount((c) => c + 1);
+    }
   }
+
+  // router.refresh() re-fetches the signed scan URL after an upload — must
+  // run as an effect, not during render, or it loops (refresh re-renders
+  // this component, which re-enters the render-phase block above).
+  useEffect(() => {
+    if (saveCount > 0) router.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveCount]);
 
   async function handleRemove() {
     if (!ticket) return;
@@ -124,6 +153,19 @@ export default function InvoiceEditor({
       router.push("/admin/invoices");
     } finally {
       setRemoving(false);
+    }
+  }
+
+  async function handleRemoveScan() {
+    if (!ticket?.scan_path) return;
+    if (!confirm("Remove the attached scan?")) return;
+    setRemovingScan(true);
+    try {
+      await removeTicketScan(ticket.id, ticket.scan_path);
+      setScanRemoved(true);
+      router.refresh();
+    } finally {
+      setRemovingScan(false);
     }
   }
 
@@ -287,6 +329,53 @@ export default function InvoiceEditor({
             <div className="font-bold text-accent text-[15px] py-2 tabular-nums">
               {towReimbursement !== null ? `$${towReimbursement.toLocaleString()}` : "—"}
             </div>
+          </Field>
+        </div>
+      </Card>
+
+      <Card title="Original Ticket Scan">
+        <div className="flex flex-col gap-3.5">
+          {hasScan && (
+            <div className="flex items-start gap-3.5">
+              <a
+                href={scanUrl ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 block rounded-lg border border-border overflow-hidden bg-surface-2 hover:opacity-90"
+              >
+                {ticket?.scan_path && isImagePath(ticket.scan_path) && scanUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={scanUrl} alt="Ticket scan" className="w-28 h-28 object-cover" />
+                ) : (
+                  <div className="w-28 h-28 flex items-center justify-center text-[11px] font-bold text-ink-2 text-center px-2">
+                    View Scan (PDF)
+                  </div>
+                )}
+              </a>
+              <div className="flex flex-col gap-1.5 pt-1">
+                <span className="text-sm font-semibold text-ink-2">Scan attached</span>
+                <button
+                  type="button"
+                  onClick={handleRemoveScan}
+                  disabled={removingScan}
+                  className="text-xs font-bold text-critical/70 hover:text-critical disabled:opacity-50 w-fit"
+                >
+                  {removingScan ? "Removing…" : "Remove scan"}
+                </button>
+              </div>
+            </div>
+          )}
+          <Field
+            label={hasScan ? "Replace Scan" : "Upload Scan"}
+            hint="A photo or PDF of the original paper ticket"
+          >
+            <input
+              key={fileInputKey}
+              type="file"
+              name="scan"
+              accept="image/*,application/pdf"
+              className="input"
+            />
           </Field>
         </div>
       </Card>

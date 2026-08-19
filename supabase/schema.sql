@@ -497,8 +497,38 @@ create index if not exists invoice_tickets_invoice_idx on public.invoice_tickets
 alter table public.invoice_tickets add column if not exists tow_rate numeric(8, 2) check (tow_rate is null or tow_rate >= 0);
 alter table public.invoice_tickets add column if not exists tow_count integer check (tow_count is null or tow_count >= 0);
 
+-- invoice_tickets: optional storage path to a photo/PDF scan of the
+-- original paper ticket this row was keyed in from.
+alter table public.invoice_tickets add column if not exists scan_path text;
+
 -- ============================================================
--- 13. BOOTSTRAP THE FIRST ADMIN
+-- 13. TICKET SCANS (STORAGE) — a private bucket holding photo/PDF scans
+--    of the original paper ticket each invoice_tickets row was keyed in
+--    from. Objects are keyed by ticket id, so cleanup on ticket delete is
+--    a plain storage remove() from the app rather than a DB cascade.
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('ticket-scans', 'ticket-scans', false)
+on conflict (id) do nothing;
+
+drop policy if exists ticket_scans_select on storage.objects;
+create policy ticket_scans_select on storage.objects
+  for select using (bucket_id = 'ticket-scans' and public.is_admin());
+
+drop policy if exists ticket_scans_insert on storage.objects;
+create policy ticket_scans_insert on storage.objects
+  for insert with check (bucket_id = 'ticket-scans' and public.is_admin());
+
+drop policy if exists ticket_scans_update on storage.objects;
+create policy ticket_scans_update on storage.objects
+  for update using (bucket_id = 'ticket-scans' and public.is_admin());
+
+drop policy if exists ticket_scans_delete on storage.objects;
+create policy ticket_scans_delete on storage.objects
+  for delete using (bucket_id = 'ticket-scans' and public.is_admin());
+
+-- ============================================================
+-- 14. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication
 --    -> Users -> Add user (check "Auto Confirm User"). This creates a

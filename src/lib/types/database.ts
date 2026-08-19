@@ -55,6 +55,7 @@ export interface InvoiceTicket {
   tow_rate: number | null;
   tow_count: number | null;
   invoice_id: string | null;
+  scan_path: string | null;
   created_at: string;
 }
 

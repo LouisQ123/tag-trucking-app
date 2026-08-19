@@ -66,6 +66,38 @@ function ticketFields(formData: FormData) {
   };
 }
 
+const SCAN_BUCKET = "ticket-scans";
+
+// Uploads the "scan" file field (if one was picked) to storage and points
+// the ticket's scan_path at it, deleting whatever it's replacing so a
+// ticket only ever holds one scan file at a time.
+async function uploadScan(
+  supabase: Supabase,
+  formData: FormData,
+  ticketId: string,
+  previousPath?: string | null
+): Promise<string | null> {
+  const file = formData.get("scan");
+  if (!(file instanceof File) || file.size === 0) return null;
+
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+  const path = `${ticketId}/${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage.from(SCAN_BUCKET).upload(path, file, {
+    contentType: file.type || undefined,
+  });
+  if (uploadError) return uploadError.message;
+
+  const { error: updateError } = await supabase
+    .from("invoice_tickets")
+    .update({ scan_path: path })
+    .eq("id", ticketId);
+  if (updateError) return updateError.message;
+
+  if (previousPath) await supabase.storage.from(SCAN_BUCKET).remove([previousPath]);
+  return null;
+}
+
 export async function createInvoiceTicket(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
 
@@ -73,8 +105,15 @@ export async function createInvoiceTicket(_prev: ActionState, formData: FormData
   if (!fields.date || !fields.client) return { error: "Date and client are required." };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("invoice_tickets").insert(fields);
-  if (error) return { error: error.message };
+  const { data: inserted, error } = await supabase
+    .from("invoice_tickets")
+    .insert(fields)
+    .select("id")
+    .single();
+  if (error || !inserted) return { error: error?.message || "Couldn't create the ticket. Try again." };
+
+  const scanError = await uploadScan(supabase, formData, inserted.id as string);
+  if (scanError) return { error: scanError };
 
   revalidatePath("/admin/invoices");
   redirect("/admin/invoices");
@@ -92,9 +131,12 @@ export async function updateInvoiceTicket(_prev: ActionState, formData: FormData
     .from("invoice_tickets")
     .update(fields)
     .eq("id", id)
-    .select("invoice_id")
+    .select("invoice_id, scan_path")
     .single();
   if (error) return { error: error.message };
+
+  const scanError = await uploadScan(supabase, formData, id, updated?.scan_path);
+  if (scanError) return { error: scanError };
 
   if (updated?.invoice_id) await recomputeInvoiceTotal(supabase, updated.invoice_id);
 
@@ -103,18 +145,35 @@ export async function updateInvoiceTicket(_prev: ActionState, formData: FormData
   return {};
 }
 
+// Removes just the attached scan, leaving the rest of the ticket intact —
+// for replacing a bad photo or clearing one added by mistake.
+export async function removeTicketScan(ticketId: string, scanPath: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { error: removeError } = await supabase.storage.from(SCAN_BUCKET).remove([scanPath]);
+  if (removeError) throw new Error(removeError.message);
+
+  const { error } = await supabase.from("invoice_tickets").update({ scan_path: null }).eq("id", ticketId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/invoices");
+  revalidatePath(`/admin/invoices/${ticketId}`);
+}
+
 export async function deleteInvoiceTicket(id: string) {
   await requireAdmin();
   const supabase = await createClient();
   const { data: existing } = await supabase
     .from("invoice_tickets")
-    .select("invoice_id")
+    .select("invoice_id, scan_path")
     .eq("id", id)
     .single();
 
   const { error } = await supabase.from("invoice_tickets").delete().eq("id", id);
   if (error) throw new Error(error.message);
 
+  if (existing?.scan_path) await supabase.storage.from(SCAN_BUCKET).remove([existing.scan_path]);
   if (existing?.invoice_id) await recomputeInvoiceTotal(supabase, existing.invoice_id);
 
   revalidatePath("/admin/invoices");

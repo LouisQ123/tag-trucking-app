@@ -14,6 +14,14 @@ export default async function EditInvoiceTicketPage({ params }: { params: Promis
 
   if (!ticket) notFound();
 
+  let scanUrl: string | null = null;
+  if (ticket.scan_path) {
+    const { data: signed } = await supabase.storage
+      .from("ticket-scans")
+      .createSignedUrl(ticket.scan_path, 3600);
+    scanUrl = signed?.signedUrl ?? null;
+  }
+
   let invoicedLabel: string | null = null;
   if (ticket.invoice_id) {
     const { data: invoice } = await supabase
@@ -51,6 +59,7 @@ export default async function EditInvoiceTicketPage({ params }: { params: Promis
         locationSuggestions={locationSuggestions}
         clientDefaultRates={clientDefaultRates}
         invoicedLabel={invoicedLabel}
+        scanUrl={scanUrl}
       />
     </main>
   );
