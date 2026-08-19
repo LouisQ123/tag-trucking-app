@@ -207,6 +207,7 @@ export default function GenerateInvoiceForm({
             hours: t.total_hours ?? 0,
             rate: t.rate,
             towAmount: towAmount(t),
+            scanPath: t.scan_path,
           })),
         });
 

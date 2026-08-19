@@ -5,6 +5,36 @@ import {
   REMIT_TO_PHONE,
   INVOICE_SPECIAL_INSTRUCTIONS,
 } from "@/lib/companyInfo";
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
+
+const SCAN_BUCKET = "ticket-scans";
+
+function guessImageMime(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "gif") return "image/gif";
+  if (ext === "webp") return "image/webp";
+  if (ext === "heic" || ext === "heif") return "image/heic";
+  return "image/jpeg";
+}
+
+// pdf-lib can only embed PNG/JPEG directly — route every non-PDF scan
+// through the browser's own image decoder so gif/webp/heic scans work too,
+// not just the two formats pdf-lib understands natively.
+async function imageBytesToPngBytes(bytes: Uint8Array, mimeType: string): Promise<Uint8Array> {
+  const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not supported");
+  ctx.drawImage(bitmap, 0, 0);
+  const pngBlob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Canvas conversion failed"))), "image/png")
+  );
+  return new Uint8Array(await pngBlob.arrayBuffer());
+}
 
 const PDF_INK = "#1a1a1a";
 const PDF_MUTED = "#6b6b6b";
@@ -59,6 +89,7 @@ export interface InvoiceLineItem {
   hours: number;
   rate: number | null;
   towAmount: number | null;
+  scanPath: string | null;
 }
 
 export interface InvoicePdfClient {
@@ -279,5 +310,56 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
   pdf.setTextColor(PDF_INK);
   pdf.text("Thank you for your business!", pageWidth / 2, ty, { align: "center" });
 
-  pdf.save(`ATG-Trucking-Invoice-${input.invoiceNo}.pdf`);
+  const fileName = `ATG-Trucking-Invoice-${input.invoiceNo}.pdf`;
+  const scanPaths = input.lines.map((l) => l.scanPath).filter((p): p is string => !!p);
+  if (!scanPaths.length) {
+    pdf.save(fileName);
+    return;
+  }
+
+  // Append each attached ticket scan as its own page (or pages, for a
+  // multi-page PDF scan) after the invoice itself, so the sent document
+  // carries the original paper tickets as backup.
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const { PDFDocument } = await import("pdf-lib");
+  const merged = await PDFDocument.load(pdf.output("arraybuffer"));
+  const supabase = createSupabaseBrowserClient();
+
+  for (const path of scanPaths) {
+    try {
+      const { data, error } = await supabase.storage.from(SCAN_BUCKET).download(path);
+      if (error || !data) continue;
+      const bytes = new Uint8Array(await data.arrayBuffer());
+
+      if (/\.pdf$/i.test(path)) {
+        const scanDoc = await PDFDocument.load(bytes);
+        const copiedPages = await merged.copyPages(scanDoc, scanDoc.getPageIndices());
+        copiedPages.forEach((p) => merged.addPage(p));
+      } else {
+        const pngBytes = await imageBytesToPngBytes(bytes, guessImageMime(path));
+        const png = await merged.embedPng(pngBytes);
+        const maxW = pageWidth - margin * 2;
+        const maxH = pageHeight - margin * 2;
+        const scale = Math.min(maxW / png.width, maxH / png.height, 1);
+        const w = png.width * scale;
+        const h = png.height * scale;
+        const page = merged.addPage([pageWidth, pageHeight]);
+        page.drawImage(png, { x: (pageWidth - w) / 2, y: (pageHeight - h) / 2, width: w, height: h });
+      }
+    } catch {
+      // Best effort — a scan that fails to merge (unreadable format,
+      // network hiccup) just gets skipped rather than blocking the whole
+      // invoice download.
+      continue;
+    }
+  }
+
+  const mergedBytes = await merged.save();
+  const blob = new Blob([new Uint8Array(mergedBytes)], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
 }
