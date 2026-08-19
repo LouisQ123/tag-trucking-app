@@ -14,6 +14,12 @@ import { downloadInvoicePdf } from "@/lib/invoicePdf";
 import DateInput from "@/components/DateInput";
 import type { Client, Invoice, InvoiceStatus, InvoiceTicket } from "@/lib/types/database";
 
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 function parseISO(iso: string): Date | null {
   if (!iso) return null;
   const [y, m, d] = iso.split("-").map(Number);
@@ -51,6 +57,7 @@ export default function InvoiceDetail({
 
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [checkNumber, setCheckNumber] = useState(invoice.check_number ?? "");
+  const [checkReceivedDate, setCheckReceivedDate] = useState(invoice.check_received_date ?? todayISO());
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusSaved, setStatusSaved] = useState(false);
 
@@ -161,7 +168,12 @@ export default function InvoiceDetail({
     setStatusSaved(false);
     setSavingStatus(true);
     try {
-      await updateInvoiceStatus(invoice.id, nextStatus, nextStatus === "paid" ? checkNumber : "");
+      await updateInvoiceStatus(
+        invoice.id,
+        nextStatus,
+        nextStatus === "paid" ? checkNumber : "",
+        nextStatus === "paid" ? checkReceivedDate : ""
+      );
       if (nextStatus === "pending") setCheckNumber("");
       setStatusSaved(true);
       router.refresh();
@@ -174,7 +186,7 @@ export default function InvoiceDetail({
     setStatusSaved(false);
     setSavingStatus(true);
     try {
-      await updateInvoiceStatus(invoice.id, "paid", checkNumber);
+      await updateInvoiceStatus(invoice.id, "paid", checkNumber, checkReceivedDate);
       setStatusSaved(true);
       router.refresh();
     } finally {
@@ -300,7 +312,7 @@ export default function InvoiceDetail({
             </div>
           </div>
           {status === "paid" && (
-            <div className="flex-1 flex items-end gap-2.5 max-w-xs">
+            <div className="flex-1 flex items-end gap-2.5 max-w-lg">
               <div className="flex flex-col gap-1.5 flex-1">
                 <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">Check #</label>
                 <input
@@ -308,6 +320,14 @@ export default function InvoiceDetail({
                   onChange={(e) => setCheckNumber(e.target.value)}
                   placeholder="Check number"
                   className="input"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">Date Received</label>
+                <DateInput
+                  name="check_received_date"
+                  defaultValue={checkReceivedDate}
+                  onChange={setCheckReceivedDate}
                 />
               </div>
               <button

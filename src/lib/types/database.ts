@@ -85,6 +85,7 @@ export interface Invoice {
   total: number;
   status: InvoiceStatus;
   check_number: string | null;
+  check_received_date: string | null;
   created_at: string;
 }
 

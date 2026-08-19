@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveInvoice } from "@/lib/actions/invoices";
+import { saveInvoice, deleteInvoiceRecord } from "@/lib/actions/invoices";
 import { downloadInvoicePdf } from "@/lib/invoicePdf";
 import DateInput from "@/components/DateInput";
 import type { Client, Invoice, InvoiceTicket } from "@/lib/types/database";
@@ -57,6 +57,7 @@ export default function GenerateInvoiceForm({
 
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ type: "draft" | "sent"; invoiceNo: string; total: number } | null>(
     null
@@ -146,6 +147,18 @@ export default function GenerateInvoiceForm({
       router.refresh();
     } finally {
       setSavingDraft(false);
+    }
+  }
+
+  async function handleDeleteDraft() {
+    if (!draft) return;
+    if (!confirm(`Delete draft #${draft.invoice_no}? Its tickets stay on file and become billable again.`)) return;
+    setDeletingDraft(true);
+    try {
+      await deleteInvoiceRecord(draft.id);
+      router.push("/admin/invoices/history");
+    } finally {
+      setDeletingDraft(false);
     }
   }
 
@@ -371,23 +384,37 @@ export default function GenerateInvoiceForm({
         </div>
       </Card>
 
-      <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={handleSaveDraft}
-          disabled={savingDraft || submitting}
-          className="rounded-lg border border-border text-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
-        >
-          {savingDraft ? "Saving…" : "Save Draft"}
-        </button>
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={submitting || savingDraft || !selectedTickets.length}
-          className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
-        >
-          {submitting ? "Sending…" : "Generate Invoice PDF"}
-        </button>
+      <div className="flex items-center justify-between gap-3">
+        {draft ? (
+          <button
+            type="button"
+            onClick={handleDeleteDraft}
+            disabled={deletingDraft}
+            className="text-xs font-bold text-critical/70 hover:text-critical disabled:opacity-50"
+          >
+            {deletingDraft ? "Deleting…" : "Delete Draft"}
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={savingDraft || submitting || deletingDraft}
+            className="rounded-lg border border-border text-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
+          >
+            {savingDraft ? "Saving…" : "Save Draft"}
+          </button>
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={submitting || savingDraft || deletingDraft || !selectedTickets.length}
+            className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
+          >
+            {submitting ? "Sending…" : "Generate Invoice PDF"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -275,16 +275,22 @@ export async function addTicketsToInvoice(invoiceId: string, ticketIds: string[]
   revalidatePath(`/admin/invoices/history/${invoiceId}`);
 }
 
-export async function updateInvoiceStatus(invoiceId: string, status: "pending" | "paid", checkNumber: string) {
+export async function updateInvoiceStatus(
+  invoiceId: string,
+  status: "pending" | "paid",
+  checkNumber: string,
+  checkReceivedDate: string
+) {
   await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from("invoices")
     .update({
       status,
-      // A check number only means something once the invoice is marked
-      // paid — clear it going back to pending so it can't show stale.
+      // A check number/date only mean something once the invoice is marked
+      // paid — clear them going back to pending so they can't show stale.
       check_number: status === "paid" ? checkNumber.trim() || null : null,
+      check_received_date: status === "paid" ? checkReceivedDate || null : null,
     })
     .eq("id", invoiceId);
   if (error) throw new Error(error.message);
