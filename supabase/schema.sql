@@ -507,9 +507,9 @@ alter table public.invoice_tickets add column if not exists scan_path text;
 --    from. Objects are keyed by ticket id, so cleanup on ticket delete is
 --    a plain storage remove() from the app rather than a DB cascade.
 -- ============================================================
-insert into storage.buckets (id, name, public)
-values ('ticket-scans', 'ticket-scans', false)
-on conflict (id) do nothing;
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('ticket-scans', 'ticket-scans', false, 20971520)
+on conflict (id) do update set file_size_limit = 20971520;
 
 drop policy if exists ticket_scans_select on storage.objects;
 create policy ticket_scans_select on storage.objects

@@ -49,6 +49,8 @@ function isImagePath(path: string): boolean {
   return /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(path);
 }
 
+const MAX_SCAN_BYTES = 20 * 1024 * 1024;
+
 const initialState: ActionState = {};
 
 export default function InvoiceEditor({
@@ -75,6 +77,7 @@ export default function InvoiceEditor({
   const [scanRemoved, setScanRemoved] = useState(false);
   const [removingScan, setRemovingScan] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [scanTooLarge, setScanTooLarge] = useState(false);
   const hasScan = !!ticket?.scan_path && !scanRemoved;
 
   const [ticketNo, setTicketNo] = useState(ticket?.ticket_no ?? "");
@@ -131,6 +134,7 @@ export default function InvoiceEditor({
     if (!state.error) {
       setSaved(true);
       setScanRemoved(false);
+      setScanTooLarge(false);
       setFileInputKey((k) => k + 1);
       setSaveCount((c) => c + 1);
     }
@@ -153,6 +157,16 @@ export default function InvoiceEditor({
       router.push("/admin/invoices");
     } finally {
       setRemoving(false);
+    }
+  }
+
+  function onScanChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file && file.size > MAX_SCAN_BYTES) {
+      setScanTooLarge(true);
+      e.target.value = "";
+    } else {
+      setScanTooLarge(false);
     }
   }
 
@@ -367,16 +381,22 @@ export default function InvoiceEditor({
           )}
           <Field
             label={hasScan ? "Replace Scan" : "Upload Scan"}
-            hint="A photo or PDF of the original paper ticket"
+            hint="A photo or PDF of the original paper ticket, up to 20MB"
           >
             <input
               key={fileInputKey}
               type="file"
               name="scan"
               accept="image/*,application/pdf"
+              onChange={onScanChange}
               className="input"
             />
           </Field>
+          {scanTooLarge && (
+            <p className="text-sm font-semibold text-critical">
+              That file is over 20MB — pick a smaller photo or PDF.
+            </p>
+          )}
         </div>
       </Card>
 

@@ -67,6 +67,7 @@ function ticketFields(formData: FormData) {
 }
 
 const SCAN_BUCKET = "ticket-scans";
+const MAX_SCAN_BYTES = 20 * 1024 * 1024;
 
 // Uploads the "scan" file field (if one was picked) to storage and points
 // the ticket's scan_path at it, deleting whatever it's replacing so a
@@ -79,6 +80,7 @@ async function uploadScan(
 ): Promise<string | null> {
   const file = formData.get("scan");
   if (!(file instanceof File) || file.size === 0) return null;
+  if (file.size > MAX_SCAN_BYTES) return "That file is over 20MB — pick a smaller photo or PDF.";
 
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
   const path = `${ticketId}/${Date.now()}.${ext}`;
@@ -113,7 +115,12 @@ export async function createInvoiceTicket(_prev: ActionState, formData: FormData
   if (error || !inserted) return { error: error?.message || "Couldn't create the ticket. Try again." };
 
   const scanError = await uploadScan(supabase, formData, inserted.id as string);
-  if (scanError) return { error: scanError };
+  if (scanError) {
+    // Undo the insert so a failed scan doesn't leave an orphan ticket behind
+    // — the user just sees "Create Ticket" fail outright, as expected.
+    await supabase.from("invoice_tickets").delete().eq("id", inserted.id as string);
+    return { error: scanError };
+  }
 
   revalidatePath("/admin/invoices");
   redirect("/admin/invoices");
