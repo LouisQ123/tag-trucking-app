@@ -8,6 +8,7 @@ export default function NavLinks() {
   const links = [
     { href: "/admin", label: "Dashboard" },
     { href: "/admin/invoices", label: "Invoices" },
+    { href: "/admin/balances", label: "Balances" },
     { href: "/admin/clients", label: "Clients" },
     { href: "/admin/reports", label: "Reports" },
     { href: "/admin/roster", label: "Roster" },
