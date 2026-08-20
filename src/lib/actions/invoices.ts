@@ -369,3 +369,50 @@ export async function saveInvoice(input: SaveInvoiceInput): Promise<{ id: string
   revalidatePath(`/admin/invoices/history/${invoiceId}`);
   return { id: invoiceId as string };
 }
+
+export interface CreateLegacyInvoiceInput {
+  clientId: string;
+  invoiceNo: string;
+  date: string;
+  total: number;
+  status: "pending" | "paid";
+  checkNumber: string;
+  checkReceivedDate: string;
+}
+
+// A billing record from before this app tracked invoices — entered by hand
+// so it still counts toward a client's balance, with no tickets attached
+// since none exist for it.
+export async function createLegacyInvoice(
+  input: CreateLegacyInvoiceInput
+): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
+
+  if (!input.clientId || !input.invoiceNo.trim() || !input.date) {
+    return { error: "Client, invoice number, and date are required." };
+  }
+  if (!Number.isFinite(input.total) || input.total < 0) {
+    return { error: "Enter a valid amount." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("invoices")
+    .insert({
+      invoice_no: input.invoiceNo.trim(),
+      date: input.date,
+      client_id: input.clientId,
+      total: input.total,
+      status: input.status,
+      for_description: "Prior balance (added manually)",
+      check_number: input.status === "paid" ? input.checkNumber.trim() || null : null,
+      check_received_date: input.status === "paid" ? input.checkReceivedDate || null : null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message || "Couldn't add the invoice. Try again." };
+
+  revalidatePath("/admin/balances");
+  revalidatePath("/admin/invoices/history");
+  return { id: data.id as string };
+}

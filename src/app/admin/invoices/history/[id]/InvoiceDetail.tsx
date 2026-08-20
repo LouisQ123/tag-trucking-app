@@ -77,11 +77,17 @@ export default function InvoiceDetail({
 
   const client = clients.find((c) => c.id === clientId) ?? clients[0];
 
-  const total = rows.reduce(
-    (sum, t) =>
-      sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0) + (towAmount(t) ?? 0),
-    0
-  );
+  // A legacy invoice added by hand on the Balances page has no tickets to
+  // sum — its stored total is the only source of truth for those, so fall
+  // back to it rather than showing a misleading $0.00.
+  const total =
+    rows.length > 0
+      ? rows.reduce(
+          (sum, t) =>
+            sum + (t.total_hours !== null && t.rate !== null ? t.total_hours * t.rate : 0) + (towAmount(t) ?? 0),
+          0
+        )
+      : invoice.total;
   const hasTow = rows.some((t) => towAmount(t) !== null);
 
   async function handleSaveFields() {

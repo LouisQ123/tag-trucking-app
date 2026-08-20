@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Client, Invoice } from "@/lib/types/database";
+import AddOldInvoiceForm from "./AddOldInvoiceForm";
 
 function parseISO(iso: string): Date | null {
   if (!iso) return null;
@@ -57,6 +58,8 @@ export default async function BalancesPage() {
         <h1 className="text-xl font-extrabold tracking-tight">Client Balances</h1>
         <p className="text-sm text-ink-2 mt-0.5">Every client&apos;s invoices owed and paid, with totals.</p>
       </div>
+
+      {clientRows.length > 0 && <AddOldInvoiceForm clients={clientRows} />}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
