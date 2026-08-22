@@ -27,7 +27,13 @@ export interface InvoiceRow extends Invoice {
 type SortKey = "date" | "client";
 type SortDir = "asc" | "desc";
 
-export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
+export default function InvoiceHistoryTable({
+  rows,
+  submitByLabel,
+}: {
+  rows: InvoiceRow[];
+  submitByLabel: string;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
@@ -92,9 +98,14 @@ export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
                       #{inv.invoice_no}
                     </Link>
                     {inv.isNew && (
-                      <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-accent-ink bg-accent rounded px-1.5 py-0.5">
-                        New
-                      </span>
+                      <>
+                        <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-accent-ink bg-accent rounded px-1.5 py-0.5">
+                          New
+                        </span>
+                        <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-warning bg-warning/15 rounded px-1.5 py-0.5">
+                          Submit by {submitByLabel}
+                        </span>
+                      </>
                     )}
                   </div>
                 </td>
