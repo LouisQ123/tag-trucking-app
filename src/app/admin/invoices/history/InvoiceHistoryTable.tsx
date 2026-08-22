@@ -93,7 +93,7 @@ export default function InvoiceHistoryTable({
                           ? `/admin/invoices/generate?draft=${inv.id}`
                           : `/admin/invoices/history/${inv.id}`
                       }
-                      className="font-semibold hover:underline"
+                      className="font-semibold hover:underline inline-block min-w-[132px]"
                     >
                       #{inv.invoice_no}
                     </Link>

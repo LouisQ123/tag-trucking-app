@@ -122,7 +122,7 @@ export default async function BalancesPage() {
                           <div className="flex items-center gap-2 whitespace-nowrap">
                             <Link
                               href={`/admin/invoices/history/${inv.id}`}
-                              className="font-semibold hover:underline"
+                              className="font-semibold hover:underline inline-block min-w-[132px]"
                             >
                               #{inv.invoice_no}
                             </Link>
