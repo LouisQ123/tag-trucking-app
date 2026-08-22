@@ -28,7 +28,7 @@ export default async function InvoiceHistoryPage() {
     ...inv,
     clientName: clientNameById.get(inv.client_id) ?? "—",
     ticketCount: ticketCountByInvoice.get(inv.id) ?? 0,
-    isNew: isInWorkWeek(inv.created_at, week),
+    isNew: isInWorkWeek(inv.date, week),
   }));
 
   return (

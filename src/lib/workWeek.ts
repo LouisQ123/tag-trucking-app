@@ -44,8 +44,13 @@ export function getCurrentWorkWeek(): WorkWeek {
   return { weekStartOrdinal, weekEndOrdinal, dueDate };
 }
 
-export function isInWorkWeek(createdAt: string, week: WorkWeek): boolean {
-  const ordinal = ymdToOrdinal(toEasternYmd(new Date(createdAt)));
+// `date` is a plain "YYYY-MM-DD" column with no time/timezone component, so
+// it's parsed directly as a calendar day rather than through Eastern-time
+// conversion (which would risk shifting it a day off).
+export function isInWorkWeek(invoiceDate: string, week: WorkWeek): boolean {
+  const [y, m, d] = invoiceDate.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const ordinal = ymdToOrdinal({ y, m, d });
   return ordinal >= week.weekStartOrdinal && ordinal <= week.weekEndOrdinal;
 }
 

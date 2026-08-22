@@ -126,7 +126,7 @@ export default async function BalancesPage() {
                             >
                               #{inv.invoice_no}
                             </Link>
-                            {isInWorkWeek(inv.created_at, week) && (
+                            {isInWorkWeek(inv.date, week) && (
                               <>
                                 <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-accent-ink bg-accent rounded px-1.5 py-0.5">
                                   New
