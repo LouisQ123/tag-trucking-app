@@ -21,6 +21,7 @@ function currency(n: number) {
 export interface InvoiceRow extends Invoice {
   clientName: string;
   ticketCount: number;
+  isNew: boolean;
 }
 
 type SortKey = "date" | "client";
@@ -79,16 +80,23 @@ export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
             {sorted.map((inv) => (
               <tr key={inv.id} className="border-t border-grid hover:bg-surface-2">
                 <td className="px-4 py-3">
-                  <Link
-                    href={
-                      inv.status === "draft"
-                        ? `/admin/invoices/generate?draft=${inv.id}`
-                        : `/admin/invoices/history/${inv.id}`
-                    }
-                    className="font-semibold hover:underline"
-                  >
-                    #{inv.invoice_no}
-                  </Link>
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <Link
+                      href={
+                        inv.status === "draft"
+                          ? `/admin/invoices/generate?draft=${inv.id}`
+                          : `/admin/invoices/history/${inv.id}`
+                      }
+                      className="font-semibold hover:underline"
+                    >
+                      #{inv.invoice_no}
+                    </Link>
+                    {inv.isNew && (
+                      <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-accent-ink bg-accent rounded px-1.5 py-0.5">
+                        New
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 tabular-nums">{fmtDate(inv.date)}</td>
                 <td className="px-4 py-3">{inv.clientName}</td>

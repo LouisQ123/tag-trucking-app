@@ -18,6 +18,11 @@ function currency(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+const NEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+function isNew(createdAt: string) {
+  return Date.now() - new Date(createdAt).getTime() < NEW_WINDOW_MS;
+}
+
 export default async function BalancesPage() {
   const supabase = await createClient();
   // Drafts aren't sent yet — they aren't a real receivable, so they're left
@@ -116,12 +121,19 @@ export default async function BalancesPage() {
                     {invoices.map((inv) => (
                       <tr key={inv.id} className="border-t border-grid hover:bg-surface-2">
                         <td className="px-5 py-2.5">
-                          <Link
-                            href={`/admin/invoices/history/${inv.id}`}
-                            className="font-semibold hover:underline"
-                          >
-                            #{inv.invoice_no}
-                          </Link>
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <Link
+                              href={`/admin/invoices/history/${inv.id}`}
+                              className="font-semibold hover:underline"
+                            >
+                              #{inv.invoice_no}
+                            </Link>
+                            {isNew(inv.created_at) && (
+                              <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-accent-ink bg-accent rounded px-1.5 py-0.5">
+                                New
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2.5 tabular-nums">{fmtDate(inv.date)}</td>
                         <td className="px-4 py-2.5">
