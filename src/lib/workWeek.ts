@@ -28,34 +28,42 @@ function ymdToOrdinal({ y, m, d }: Ymd): number {
   return Date.UTC(y, m - 1, d);
 }
 
-export interface WorkWeek {
-  weekStartOrdinal: number;
-  weekEndOrdinal: number;
-  dueDate: Date;
-}
-
-export function getCurrentWorkWeek(): WorkWeek {
-  const todayOrdinal = ymdToOrdinal(toEasternYmd(new Date()));
-  const weekday = new Date(todayOrdinal).getUTCDay(); // 0=Sun..6=Sat
-  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
-  const weekStartOrdinal = todayOrdinal + diffToMonday * DAY_MS;
-  const weekEndOrdinal = weekStartOrdinal + 6 * DAY_MS;
-  const dueDate = new Date(weekStartOrdinal + 7 * DAY_MS);
-  return { weekStartOrdinal, weekEndOrdinal, dueDate };
-}
-
 // `date` is a plain "YYYY-MM-DD" column with no time/timezone component, so
 // it's parsed directly as a calendar day rather than through Eastern-time
 // conversion (which would risk shifting it a day off).
-export function isInWorkWeek(invoiceDate: string, week: WorkWeek): boolean {
-  const [y, m, d] = invoiceDate.split("-").map(Number);
-  if (!y || !m || !d) return false;
-  const ordinal = ymdToOrdinal({ y, m, d });
-  return ordinal >= week.weekStartOrdinal && ordinal <= week.weekEndOrdinal;
+function parseIsoDate(dateStr: string): Ymd | null {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return { y, m, d };
 }
 
-export function formatSubmitBy(week: WorkWeek): string {
-  return week.dueDate.toLocaleDateString("en-US", {
+// The due date is the Monday following the Mon–Sun work week the invoice's
+// own date falls in — computed per invoice (not from "today") so that on
+// the due date itself, last week's invoices are still correctly due today
+// rather than already having rolled into a new "current" week.
+function dueDateOrdinal(invoiceDate: string): number | null {
+  const ymd = parseIsoDate(invoiceDate);
+  if (!ymd) return null;
+  const ordinal = ymdToOrdinal(ymd);
+  const weekday = new Date(ordinal).getUTCDay(); // 0=Sun..6=Sat
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
+  const weekStartOrdinal = ordinal + diffToMonday * DAY_MS;
+  return weekStartOrdinal + 7 * DAY_MS;
+}
+
+// Stays true through 11:59:59pm Eastern on the due Monday, then flips false
+// once the Eastern calendar date rolls past it.
+export function isBadgeActive(invoiceDate: string): boolean {
+  const due = dueDateOrdinal(invoiceDate);
+  if (due === null) return false;
+  const todayOrdinal = ymdToOrdinal(toEasternYmd(new Date()));
+  return todayOrdinal <= due;
+}
+
+export function formatSubmitBy(invoiceDate: string): string {
+  const due = dueDateOrdinal(invoiceDate);
+  if (due === null) return "";
+  return new Date(due).toLocaleDateString("en-US", {
     timeZone: "UTC",
     month: "short",
     day: "numeric",

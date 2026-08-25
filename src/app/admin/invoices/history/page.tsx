@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Invoice } from "@/lib/types/database";
-import { getCurrentWorkWeek, isInWorkWeek, formatSubmitBy } from "@/lib/workWeek";
+import { isBadgeActive, formatSubmitBy } from "@/lib/workWeek";
 import InvoiceHistoryTable, { type InvoiceRow } from "./InvoiceHistoryTable";
 
 export default async function InvoiceHistoryPage() {
   const supabase = await createClient();
-  const week = getCurrentWorkWeek();
-  const submitByLabel = formatSubmitBy(week);
   const [{ data: invoices }, { data: clients }, { data: ticketRows }] = await Promise.all([
     supabase
       .from("invoices")
@@ -28,7 +26,8 @@ export default async function InvoiceHistoryPage() {
     ...inv,
     clientName: clientNameById.get(inv.client_id) ?? "—",
     ticketCount: ticketCountByInvoice.get(inv.id) ?? 0,
-    isNew: isInWorkWeek(inv.date, week),
+    isNew: isBadgeActive(inv.date),
+    submitByLabel: formatSubmitBy(inv.date),
   }));
 
   return (
@@ -46,7 +45,7 @@ export default async function InvoiceHistoryPage() {
         </Link>
       </div>
 
-      <InvoiceHistoryTable rows={rows} submitByLabel={submitByLabel} />
+      <InvoiceHistoryTable rows={rows} />
     </main>
   );
 }

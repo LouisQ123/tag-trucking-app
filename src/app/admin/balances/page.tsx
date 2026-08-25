@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Client, Invoice } from "@/lib/types/database";
-import { getCurrentWorkWeek, isInWorkWeek, formatSubmitBy } from "@/lib/workWeek";
+import { isBadgeActive, formatSubmitBy } from "@/lib/workWeek";
 import AddOldInvoiceForm from "./AddOldInvoiceForm";
 
 function parseISO(iso: string): Date | null {
@@ -21,8 +21,6 @@ function currency(n: number) {
 
 export default async function BalancesPage() {
   const supabase = await createClient();
-  const week = getCurrentWorkWeek();
-  const submitByLabel = formatSubmitBy(week);
   // Drafts aren't sent yet — they aren't a real receivable, so they're left
   // out of both the owed and paid totals entirely.
   const [{ data: clients }, { data: invoices }] = await Promise.all([
@@ -126,13 +124,13 @@ export default async function BalancesPage() {
                             >
                               #{inv.invoice_no}
                             </Link>
-                            {isInWorkWeek(inv.date, week) && (
+                            {isBadgeActive(inv.date) && (
                               <>
                                 <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-accent-ink bg-accent rounded px-1.5 py-0.5">
                                   New
                                 </span>
                                 <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-warning bg-warning/15 rounded px-1.5 py-0.5">
-                                  Submit by {submitByLabel}
+                                  Submit by {formatSubmitBy(inv.date)}
                                 </span>
                               </>
                             )}
