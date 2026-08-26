@@ -3,26 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+export const NAV_LINKS = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/invoices", label: "Invoices" },
+  { href: "/admin/balances", label: "Balances" },
+  { href: "/admin/clients", label: "Clients" },
+  { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/roster", label: "Roster" },
+  { href: "/admin/team", label: "Team" },
+  { href: "/account", label: "Account" },
+];
+
+export function isNavLinkActive(pathname: string, href: string): boolean {
+  return href === "/" || href === "/admin" ? pathname === href : pathname.startsWith(href);
+}
+
 export default function NavLinks() {
   const pathname = usePathname();
-  const links = [
-    { href: "/admin", label: "Dashboard" },
-    { href: "/admin/invoices", label: "Invoices" },
-    { href: "/admin/balances", label: "Balances" },
-    { href: "/admin/clients", label: "Clients" },
-    { href: "/admin/reports", label: "Reports" },
-    { href: "/admin/roster", label: "Roster" },
-    { href: "/admin/team", label: "Team" },
-    { href: "/account", label: "Account" },
-  ];
 
   return (
-    <nav className="flex items-center gap-1 bg-surface-2 rounded-lg p-1">
-      {links.map((link) => {
-        const active =
-          link.href === "/" || link.href === "/admin"
-            ? pathname === link.href
-            : pathname.startsWith(link.href);
+    <nav className="hidden lg:flex items-center gap-1 bg-surface-2 rounded-lg p-1">
+      {NAV_LINKS.map((link) => {
+        const active = isNavLinkActive(pathname, link.href);
         return (
           <Link
             key={link.href}
