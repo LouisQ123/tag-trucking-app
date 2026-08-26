@@ -89,7 +89,7 @@ function normalize(raw: unknown): ExtractedSheet | null {
 // only ever receives the resulting storage paths, downloads the bytes
 // itself to hand to Claude, and deletes the objects afterward — they're
 // only used as OCR input, not kept as a record.
-export async function extractSheetFromPhotos(paths: string[]): Promise<ExtractResult> {
+export async function extractSheetFromPhotos(paths: string[], knownDriverNames: string[] = []): Promise<ExtractResult> {
   await requireAdmin();
 
   const cleanPaths = paths.filter(Boolean);
@@ -155,7 +155,11 @@ export async function extractSheetFromPhotos(paths: string[]): Promise<ExtractRe
   ]
 }
 
-Known truck numbers for this fleet (match to these if handwriting is close, otherwise transcribe as written): ${TRUCK_NUMBERS.join(", ")}
+${
+      knownDriverNames.length
+        ? `Known drivers for this fleet (match "driverName" to the closest one if handwriting is close, otherwise transcribe as written): ${knownDriverNames.join(", ")}\n`
+        : ""
+    }Known truck numbers for this fleet (match to these if handwriting is close, otherwise transcribe as written): ${TRUCK_NUMBERS.join(", ")}
 Known dumping locations: ${DUMPING_LOCATIONS.join(", ")}
 Known material types: ${MATERIAL_TYPES.join(", ")}
 Known companies: ${COMPANIES.join(", ")}

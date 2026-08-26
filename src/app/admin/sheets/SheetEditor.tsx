@@ -268,7 +268,7 @@ export default function SheetEditor({
     }
 
     setExtracting(true);
-    const result = await extractSheetFromPhotos(uploadedPaths);
+    const result = await extractSheetFromPhotos(uploadedPaths, driverNameSuggestions);
     setExtracting(false);
     if (result.error || !result.data) {
       setPhotoError(result.error || "Extraction failed.");
