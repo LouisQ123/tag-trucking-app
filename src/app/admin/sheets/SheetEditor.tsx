@@ -3,12 +3,33 @@
 import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import { createSheet, updateSheet } from "@/lib/actions/sheets";
+import { extractSheetFromPhotos, type ExtractedSheet } from "@/lib/actions/sheetPhotoExtraction";
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActionState } from "@/lib/actions/auth";
 import { DUMPING_LOCATIONS, MATERIAL_TYPES, COMPANIES, TRUCK_NUMBERS } from "@/lib/loadOptions";
 import TimeInput from "@/components/TimeInput";
 import DateInput from "@/components/DateInput";
 import ComboInput from "@/components/ComboInput";
 import type { ProductionSheet } from "@/lib/types/database";
+
+const SHEET_PHOTOS_BUCKET = "sheet-photos";
+
+// Normalizes any browser-decodable photo (including HEIC from iPhones) to a
+// JPEG blob before upload, since Claude's vision API only accepts
+// JPEG/PNG/GIF/WEBP — the source format off a phone camera is otherwise
+// unpredictable.
+async function normalizePhotoToJpeg(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("This browser can't process images.");
+  ctx.drawImage(bitmap, 0, 0);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Couldn't process the photo."))), "image/jpeg", 0.9);
+  });
+}
 
 interface LoadRow {
   key: string;
@@ -53,6 +74,16 @@ export default function SheetEditor({
   driverPayRates: Record<string, number>;
 }) {
   const [state, formAction, pending] = useActionState(sheet ? updateSheet : createSheet, initialState);
+  const supabaseBrowser = useMemo(() => createSupabaseBrowserClient(), []);
+
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [extractedBanner, setExtractedBanner] = useState(false);
+  // DateInput/TimeInput manage their own value internally and only read
+  // `defaultValue` on mount, so applying extracted values requires forcing
+  // a remount rather than just updating props.
+  const [formResetKey, setFormResetKey] = useState(0);
 
   const [driverName, setDriverName] = useState(sheet?.driver_name ?? "");
   const [date, setDate] = useState(sheet?.date ?? todayISO());
@@ -159,6 +190,89 @@ export default function SheetEditor({
     }
   }
 
+  function applyExtracted(data: ExtractedSheet) {
+    if (data.driverName) onDriverChange(data.driverName);
+    if (data.date) setDate(data.date);
+    if (data.truckNumber) setTruck(data.truckNumber);
+    if (data.startTime) setStartTime(data.startTime);
+    if (data.endTime) setEndTime(data.endTime);
+    if (data.hours) {
+      setHoursTouched(true);
+      setHours(data.hours);
+    } else if (data.startTime || data.endTime) {
+      // No explicit hours on the sheet — derive it the same way manual
+      // start/end entry does, since applying extracted values bypasses the
+      // TimeInput onChange handlers that normally trigger this.
+      onStartEnd(data.startTime || startTime, data.endTime || endTime);
+    }
+    if (data.fuelGallons) setFuel(data.fuelGallons);
+    if (data.startMiles) setStartMiles(data.startMiles);
+    if (data.endMiles) setEndMiles(data.endMiles);
+    if (data.remarks) setRemarks(data.remarks);
+    if (data.loads.length) {
+      setLoads(
+        data.loads.map((l) => ({
+          key: Math.random().toString(36).slice(2),
+          jobSite: l.jobSite,
+          dumping: l.dumping,
+          type: l.type,
+          company: l.company,
+          jobSiteArrivalTime: l.jobSiteArrivalTime,
+          jobSiteDepartureTime: l.jobSiteDepartureTime,
+          note: l.note,
+        }))
+      );
+    }
+    setFormResetKey((k) => k + 1);
+    setExtractedBanner(true);
+  }
+
+  // Photos are uploaded straight from the browser to Supabase Storage —
+  // same reasoning as ticket scans: Vercel's serverless functions cap
+  // request bodies well under a real phone photo. The Server Action only
+  // ever receives the resulting paths and deletes them after extraction.
+  async function onPhotosSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    e.target.value = "";
+
+    setPhotoError(null);
+    setExtractedBanner(false);
+    setUploadingPhotos(true);
+    const uploadedPaths: string[] = [];
+    let failure: string | null = null;
+    for (const file of files) {
+      try {
+        const blob = await normalizePhotoToJpeg(file);
+        const path = `${crypto.randomUUID()}/${Date.now()}.jpg`;
+        const { error } = await supabaseBrowser.storage.from(SHEET_PHOTOS_BUCKET).upload(path, blob, {
+          contentType: "image/jpeg",
+        });
+        if (error) throw new Error(error.message);
+        uploadedPaths.push(path);
+      } catch (err) {
+        failure = err instanceof Error ? err.message : `Couldn't process ${file.name}.`;
+        break;
+      }
+    }
+    setUploadingPhotos(false);
+
+    if (failure) {
+      setPhotoError(failure);
+      if (uploadedPaths.length) await supabaseBrowser.storage.from(SHEET_PHOTOS_BUCKET).remove(uploadedPaths);
+      return;
+    }
+
+    setExtracting(true);
+    const result = await extractSheetFromPhotos(uploadedPaths);
+    setExtracting(false);
+    if (result.error || !result.data) {
+      setPhotoError(result.error || "Extraction failed.");
+      return;
+    }
+    applyExtracted(result.data);
+  }
+
   function commitJobSite(v: string) {
     const trimmed = v.trim();
     if (trimmed && !extraJobSites.includes(trimmed)) {
@@ -210,6 +324,33 @@ export default function SheetEditor({
         </div>
       )}
 
+      <Card title="Upload Photo">
+        <div className="flex flex-col gap-2.5">
+          <p className="text-[12.5px] text-ink-2">
+            Snap a photo of the physical sheet and the fields below will be filled in automatically — review
+            everything before saving.
+          </p>
+          <label className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border hover:border-accent hover:text-accent text-ink-2 font-bold text-[13px] py-2.5 cursor-pointer">
+            {uploadingPhotos ? "Uploading…" : extracting ? "Reading the sheet…" : "+ Upload photo(s)"}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              capture="environment"
+              className="hidden"
+              disabled={uploadingPhotos || extracting}
+              onChange={onPhotosSelected}
+            />
+          </label>
+          {photoError && <p className="text-[12.5px] font-semibold text-critical">{photoError}</p>}
+          {extractedBanner && !photoError && (
+            <p className="text-[12.5px] font-semibold text-good">
+              Extracted from photo — please review the fields below before saving.
+            </p>
+          )}
+        </div>
+      </Card>
+
       <Card title="Sheet">
         <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
           <Field label="Driver">
@@ -223,7 +364,7 @@ export default function SheetEditor({
             />
           </Field>
           <Field label="Date">
-            <DateInput name="date" defaultValue={date} onChange={setDate} required />
+            <DateInput key={formResetKey} name="date" defaultValue={date} onChange={setDate} required />
           </Field>
           <Field label="Truck Number">
             <ComboInput
@@ -241,6 +382,7 @@ export default function SheetEditor({
         <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
           <Field label="Start Time">
             <TimeInput
+              key={formResetKey}
               name="start_time"
               defaultValue={startTime}
               onChange={(v) => {
@@ -251,6 +393,7 @@ export default function SheetEditor({
           </Field>
           <Field label="End Time">
             <TimeInput
+              key={formResetKey}
               name="end_time"
               defaultValue={endTime}
               onChange={(v) => {

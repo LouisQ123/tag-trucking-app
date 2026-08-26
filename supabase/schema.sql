@@ -530,7 +530,33 @@ create policy ticket_scans_delete on storage.objects
   for delete using (bucket_id = 'ticket-scans' and public.is_admin());
 
 -- ============================================================
--- 14. BOOTSTRAP THE FIRST ADMIN
+-- 14. SHEET PHOTOS (STORAGE) — a private bucket holding photos of physical
+--    production sheets uploaded for AI data extraction. Purely transient:
+--    the app deletes each object right after extraction, whether it
+--    succeeds or fails, since the photo's only job is OCR input.
+-- ============================================================
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('sheet-photos', 'sheet-photos', false, 20971520)
+on conflict (id) do update set file_size_limit = 20971520;
+
+drop policy if exists sheet_photos_select on storage.objects;
+create policy sheet_photos_select on storage.objects
+  for select using (bucket_id = 'sheet-photos' and public.is_admin());
+
+drop policy if exists sheet_photos_insert on storage.objects;
+create policy sheet_photos_insert on storage.objects
+  for insert with check (bucket_id = 'sheet-photos' and public.is_admin());
+
+drop policy if exists sheet_photos_update on storage.objects;
+create policy sheet_photos_update on storage.objects
+  for update using (bucket_id = 'sheet-photos' and public.is_admin());
+
+drop policy if exists sheet_photos_delete on storage.objects;
+create policy sheet_photos_delete on storage.objects
+  for delete using (bucket_id = 'sheet-photos' and public.is_admin());
+
+-- ============================================================
+-- 15. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication
 --    -> Users -> Add user (check "Auto Confirm User"). This creates a
