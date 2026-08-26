@@ -227,10 +227,11 @@ export default function SheetEditor({
     setExtractedBanner(true);
   }
 
-  // Photos are uploaded straight from the browser to Supabase Storage —
-  // same reasoning as ticket scans: Vercel's serverless functions cap
-  // request bodies well under a real phone photo. The Server Action only
-  // ever receives the resulting paths and deletes them after extraction.
+  // Photos and PDF scans are uploaded straight from the browser to
+  // Supabase Storage — same reasoning as ticket scans: Vercel's serverless
+  // functions cap request bodies well under a real phone photo or scanned
+  // PDF. The Server Action only ever receives the resulting paths and
+  // deletes them after extraction.
   async function onPhotosSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
@@ -243,10 +244,13 @@ export default function SheetEditor({
     let failure: string | null = null;
     for (const file of files) {
       try {
-        const blob = await normalizePhotoToJpeg(file);
-        const path = `${crypto.randomUUID()}/${Date.now()}.jpg`;
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const blob = isPdf ? file : await normalizePhotoToJpeg(file);
+        const path = isPdf
+          ? `${crypto.randomUUID()}/${Date.now()}.pdf`
+          : `${crypto.randomUUID()}/${Date.now()}.jpg`;
         const { error } = await supabaseBrowser.storage.from(SHEET_PHOTOS_BUCKET).upload(path, blob, {
-          contentType: "image/jpeg",
+          contentType: isPdf ? "application/pdf" : "image/jpeg",
         });
         if (error) throw new Error(error.message);
         uploadedPaths.push(path);
@@ -324,17 +328,17 @@ export default function SheetEditor({
         </div>
       )}
 
-      <Card title="Upload Photo">
+      <Card title="Upload Photo or Scan">
         <div className="flex flex-col gap-2.5">
           <p className="text-[12.5px] text-ink-2">
-            Snap a photo of the physical sheet and the fields below will be filled in automatically — review
-            everything before saving.
+            Snap a photo or upload a scanned PDF of the physical sheet and the fields below will be filled in
+            automatically — review everything before saving.
           </p>
           <label className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border hover:border-accent hover:text-accent text-ink-2 font-bold text-[13px] py-2.5 cursor-pointer">
-            {uploadingPhotos ? "Uploading…" : extracting ? "Reading the sheet…" : "+ Upload photo(s)"}
+            {uploadingPhotos ? "Uploading…" : extracting ? "Reading the sheet…" : "+ Upload photo(s) or PDF"}
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf"
               multiple
               capture="environment"
               className="hidden"

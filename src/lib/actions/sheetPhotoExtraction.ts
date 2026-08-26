@@ -45,6 +45,10 @@ function mediaTypeFromPath(path: string): SupportedMediaType {
   return "image/jpeg";
 }
 
+function isPdfPath(path: string): boolean {
+  return path.toLowerCase().endsWith(".pdf");
+}
+
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
@@ -79,17 +83,17 @@ function normalize(raw: unknown): ExtractedSheet | null {
   };
 }
 
-// Photos are uploaded straight from the browser to Supabase Storage (same
-// reasoning as ticket scans: Vercel's serverless functions cap request
-// bodies well under a phone photo). This action only ever receives the
-// resulting storage paths, downloads the bytes itself to hand to Claude,
-// and deletes the objects afterward — the photo's only job is OCR input,
-// it isn't kept as a record.
+// Photos and PDF scans are uploaded straight from the browser to Supabase
+// Storage (same reasoning as ticket scans: Vercel's serverless functions
+// cap request bodies well under a phone photo or scanned PDF). This action
+// only ever receives the resulting storage paths, downloads the bytes
+// itself to hand to Claude, and deletes the objects afterward — they're
+// only used as OCR input, not kept as a record.
 export async function extractSheetFromPhotos(paths: string[]): Promise<ExtractResult> {
   await requireAdmin();
 
   const cleanPaths = paths.filter(Boolean);
-  if (!cleanPaths.length) return { error: "No photos to extract from." };
+  if (!cleanPaths.length) return { error: "No files to extract from." };
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "AI extraction isn't configured — missing ANTHROPIC_API_KEY." };
@@ -97,23 +101,35 @@ export async function extractSheetFromPhotos(paths: string[]): Promise<ExtractRe
   const supabase = await createClient();
 
   try {
-    const imageBlocks: Anthropic.ImageBlockParam[] = [];
+    const fileBlocks: (Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam)[] = [];
     for (const path of cleanPaths) {
       const { data, error } = await supabase.storage.from(SHEET_PHOTOS_BUCKET).download(path);
-      if (error || !data) return { error: `Couldn't load an uploaded photo: ${error?.message ?? "unknown error"}` };
+      if (error || !data)
+        return { error: `Couldn't load an uploaded file: ${error?.message ?? "unknown error"}` };
       const bytes = Buffer.from(await data.arrayBuffer());
-      imageBlocks.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: mediaTypeFromPath(path),
-          data: bytes.toString("base64"),
-        },
-      });
+      if (isPdfPath(path)) {
+        fileBlocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: bytes.toString("base64"),
+          },
+        });
+      } else {
+        fileBlocks.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: mediaTypeFromPath(path),
+            data: bytes.toString("base64"),
+          },
+        });
+      }
     }
 
     const todayYear = new Date().getFullYear();
-    const prompt = `You are extracting data from one or more photos of a handwritten trucking production sheet for ATG Trucking LLC. If multiple photos were provided, they are pages of the same sheet — merge them into one result. Read carefully and return ONLY a single JSON object (no markdown fences, no commentary) with exactly this shape:
+    const prompt = `You are extracting data from one or more photos or scanned PDF pages of a handwritten trucking production sheet for ATG Trucking LLC. If multiple files were provided, they are pages of the same sheet — merge them into one result. Read carefully and return ONLY a single JSON object (no markdown fences, no commentary) with exactly this shape:
 
 {
   "driverName": string,
@@ -153,7 +169,7 @@ Leave a field as "" if it isn't legible or isn't on the sheet — never guess or
       messages: [
         {
           role: "user",
-          content: [...imageBlocks, { type: "text", text: prompt }],
+          content: [...fileBlocks, { type: "text", text: prompt }],
         },
       ],
     });
