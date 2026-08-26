@@ -80,6 +80,7 @@ export default function TimeInput({
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -115,7 +116,14 @@ export default function TimeInput({
       <input type="hidden" name={name} value={value} />
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // Anchoring from the trigger's actual position (rather than
+          // always left-aligning) keeps the popover from overflowing off
+          // the right edge of a phone screen.
+          const rect = wrapRef.current?.getBoundingClientRect();
+          setAlignRight(!!rect && rect.left + 200 > window.innerWidth - 8);
+          setOpen((o) => !o);
+        }}
         className="input flex items-center justify-between gap-2"
       >
         <span className={value ? "" : "text-muted"}>{value ? fmtDisplay(value) : "Select time"}</span>
@@ -126,7 +134,11 @@ export default function TimeInput({
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1.5 bg-surface border border-border rounded-xl shadow-lg p-2 flex gap-1 w-[200px]">
+        <div
+          className={`absolute z-20 mt-1.5 bg-surface border border-border rounded-xl shadow-lg p-2 flex gap-1 w-[200px] max-w-[calc(100vw-24px)] ${
+            alignRight ? "right-0" : "left-0"
+          }`}
+        >
           <ScrollColumn
             items={HOURS}
             selected={h12}

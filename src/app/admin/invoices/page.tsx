@@ -29,7 +29,7 @@ export default async function InvoicesPage() {
           <h1 className="text-xl font-extrabold tracking-tight">Invoices</h1>
           <p className="text-sm text-ink-2 mt-0.5">Client billing tickets, ready to turn into an invoice.</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <Link
             href="/admin/invoices/history"
             className="rounded-lg border border-border text-ink font-bold text-sm px-4 py-2.5"

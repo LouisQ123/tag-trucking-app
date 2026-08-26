@@ -36,15 +36,15 @@ export default function BarList({
       {data.map((d) => {
         const pct = Math.max((d.value / max) * 100, d.value > 0 ? 3 : 0);
         return (
-          <div key={d.label} className="flex items-center gap-2.5 h-[26px]">
+          <div key={d.label} className="flex items-center gap-2.5 h-[26px] min-w-0">
             <div
               className="flex-none text-right text-[12px] text-ink-2 truncate"
-              style={{ width: labelWidth }}
+              style={{ width: `clamp(64px, 28vw, ${labelWidth}px)` }}
               title={d.label}
             >
               {d.label}
             </div>
-            <div className="flex-1 relative h-[14px]">
+            <div className="flex-1 min-w-0 relative h-[14px]">
               <svg
                 width="100%"
                 height="14"

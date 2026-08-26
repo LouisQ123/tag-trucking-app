@@ -318,7 +318,7 @@ export default function InvoiceDetail({
             </div>
           </div>
           {status === "paid" && (
-            <div className="flex-1 flex items-end gap-2.5 max-w-lg">
+            <div className="flex-1 flex flex-col sm:flex-row sm:items-end gap-2.5 max-w-lg">
               <div className="flex flex-col gap-1.5 flex-1">
                 <label className="text-[11px] font-bold uppercase tracking-wide text-ink-2">Check #</label>
                 <input
@@ -366,8 +366,8 @@ export default function InvoiceDetail({
           <div className="mb-4 pb-4 border-b border-grid">
             {pool.length ? (
               <>
-                <div className="max-h-64 overflow-y-auto border border-border rounded-lg">
-                  <table className="w-full text-sm">
+                <div className="max-h-64 overflow-y-auto overflow-x-auto border border-border rounded-lg">
+                  <table className="w-full text-sm min-w-[420px]">
                     <tbody>
                       {pool.map((t) => (
                         <tr

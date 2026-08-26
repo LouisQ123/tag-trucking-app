@@ -62,7 +62,7 @@ export default async function BalancesPage() {
 
       {clientRows.length > 0 && <AddOldInvoiceForm clients={clientRows} />}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
         <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted mb-2">Total Owed</p>
           <p className="text-2xl font-extrabold text-warning tabular-nums">{currency(totalOwed)}</p>

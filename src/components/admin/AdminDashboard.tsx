@@ -231,7 +231,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
         <select
           value={driverFilter}
           onChange={(e) => setDriverFilter(e.target.value)}
-          className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5"
+          className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5 max-w-[140px] sm:max-w-[220px] truncate"
         >
           <option value="all">All drivers</option>
           {drivers.map((d) => (
@@ -243,7 +243,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
         <select
           value={companyFilter}
           onChange={(e) => setCompanyFilter(e.target.value)}
-          className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5"
+          className="text-sm rounded-md border border-border bg-page px-2.5 py-1.5 max-w-[140px] sm:max-w-[220px] truncate"
         >
           <option value="all">All companies</option>
           {companies.map((c) => (
@@ -435,7 +435,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                           <div className="flex items-center gap-3">
                             <Link
                               href={`/admin/sheets/${s.id}`}
-                              className="w-8 h-8 rounded-md border border-border text-muted hover:text-ink hover:border-ink-2 text-sm flex items-center justify-center"
+                              className="w-9 h-9 rounded-md border border-border text-muted hover:text-ink hover:border-ink-2 text-sm flex items-center justify-center flex-none"
                               aria-label="Edit sheet"
                             >
                               ✎
@@ -443,7 +443,7 @@ export default function AdminDashboard({ sheets }: { sheets: ProductionSheet[] }
                             <button
                               onClick={() => handleDelete(s)}
                               disabled={deletingId === s.id}
-                              className="w-8 h-8 rounded-md border border-critical/30 text-critical/70 hover:text-critical hover:border-critical hover:bg-critical/10 text-sm disabled:opacity-50"
+                              className="w-9 h-9 rounded-md border border-critical/30 text-critical/70 hover:text-critical hover:border-critical hover:bg-critical/10 text-sm disabled:opacity-50 flex-none flex items-center justify-center"
                               aria-label="Move sheet to trash"
                             >
                               ×

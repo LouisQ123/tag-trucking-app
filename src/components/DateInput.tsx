@@ -54,6 +54,7 @@ export default function DateInput({
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const [mode, setMode] = useState<"days" | "months" | "years">("days");
   const initial = parseISO(defaultValue) ?? new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -83,6 +84,11 @@ export default function DateInput({
     setViewMonth(cur.getMonth());
     setYearRangeStart(cur.getFullYear() - 5);
     setMode("days");
+    // Anchoring the popover from the trigger's actual position (rather than
+    // always left-aligning) keeps it from overflowing off the right edge of
+    // a phone screen when the trigger itself sits in the right half.
+    const rect = wrapRef.current?.getBoundingClientRect();
+    setAlignRight(!!rect && rect.left + 280 > window.innerWidth - 8);
     setOpen((o) => !o);
   }
 
@@ -175,13 +181,17 @@ export default function DateInput({
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1.5 bg-surface border border-border rounded-xl shadow-lg p-3 w-[280px]">
+        <div
+          className={`absolute z-20 mt-1.5 bg-surface border border-border rounded-xl shadow-lg p-3 w-[280px] max-w-[calc(100vw-24px)] ${
+            alignRight ? "right-0" : "left-0"
+          }`}
+        >
           <div className="flex items-center justify-between mb-2.5">
             <button
               type="button"
               onClick={handlePrev}
               aria-label="Previous"
-              className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center flex-none"
+              className="w-8 h-8 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center flex-none"
             >
               ‹
             </button>
@@ -223,7 +233,7 @@ export default function DateInput({
               type="button"
               onClick={handleNext}
               aria-label="Next"
-              className="w-7 h-7 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center flex-none"
+              className="w-8 h-8 rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink flex items-center justify-center flex-none"
             >
               ›
             </button>

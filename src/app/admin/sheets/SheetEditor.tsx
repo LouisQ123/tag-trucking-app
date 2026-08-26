@@ -425,7 +425,7 @@ export default function SheetEditor({
       </Card>
 
       <Card title="Pay">
-        <div className="grid grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
           <Field label="Hourly Pay ($)">
             <input
               type="number"
@@ -486,7 +486,7 @@ export default function SheetEditor({
             />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3.5 mt-3.5">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 mt-3.5">
           <Field label="Total Miles">
             <div className="font-bold text-accent text-[15px] py-2 tabular-nums">
               {totalMiles !== null ? `${totalMiles.toLocaleString()} mi` : "—"}
@@ -515,7 +515,7 @@ export default function SheetEditor({
                 <button
                   type="button"
                   onClick={() => loads.length > 1 && setLoads((r) => r.filter((x) => x.key !== row.key))}
-                  className="w-6.5 h-6.5 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-sm"
+                  className="w-8 h-8 rounded-md border border-border text-muted hover:text-critical hover:border-critical text-sm flex items-center justify-center flex-none"
                   aria-label="Remove load"
                 >
                   ×

@@ -384,20 +384,20 @@ export default function GenerateInvoiceForm({
         </div>
       </Card>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {draft ? (
           <button
             type="button"
             onClick={handleDeleteDraft}
             disabled={deletingDraft}
-            className="text-xs font-bold text-critical/70 hover:text-critical disabled:opacity-50"
+            className="text-xs font-bold text-critical/70 hover:text-critical disabled:opacity-50 text-left"
           >
             {deletingDraft ? "Deleting…" : "Delete Draft"}
           </button>
         ) : (
           <span />
         )}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleSaveDraft}

@@ -88,6 +88,18 @@ body {
   color: var(--ink);
 }
 
+/* `body` is `flex flex-col` (see layout.tsx), so its direct children — the
+   top bar and every page's <main> — are flex items whose cross-axis
+   (width) stretch can end up sized off wide descendant content instead of
+   the viewport, letting the whole page grow past it instead of scrolling
+   internally where needed. Pinning width explicitly (not just min-width,
+   which alone wasn't enough to override the stretch computation) fixes
+   every page at once. */
+body > * {
+  width: 100%;
+  min-width: 0;
+}
+
 .hazard-rule {
   height: 5px;
   background: repeating-linear-gradient(
