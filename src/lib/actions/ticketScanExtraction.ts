@@ -24,7 +24,7 @@ export interface ExtractedTicket {
 }
 
 interface ExtractResult {
-  data?: ExtractedTicket;
+  data?: ExtractedTicket[];
   error?: string;
 }
 
@@ -94,7 +94,7 @@ export async function extractTicketFromScan(path: string, knownClients: string[]
         };
 
     const todayYear = new Date().getFullYear();
-    const prompt = `You are extracting data from a photo or scanned PDF of a physical trucking job ticket for ATG Trucking LLC. Read carefully and return ONLY a single JSON object (no markdown fences, no commentary) with exactly this shape:
+    const prompt = `You are extracting data from a photo or scanned PDF of one or more physical trucking job tickets for ATG Trucking LLC. A single scan can show more than one distinct ticket (e.g. two tickets photographed side by side, or a multi-page PDF where each page is a different ticket) — read carefully and return ONLY a JSON array (no markdown fences, no commentary), with one object per distinct ticket found, in the order they appear. If only one ticket is present, return an array with exactly one object. Each object has exactly this shape:
 
 {
   "ticketNo": string,       // ticket/job number written on the ticket, "" if not present
@@ -117,7 +117,7 @@ ${
     : ""
 }Known truck numbers for this fleet (match to these if handwriting is close, otherwise transcribe as written): ${TRUCK_NUMBERS.join(", ")}
 
-Leave a field as "" if it isn't legible or isn't on the ticket — never guess or fabricate a value.`;
+Leave a field as "" if it isn't legible or isn't on a ticket — never guess or fabricate a value.`;
 
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
@@ -136,14 +136,15 @@ Leave a field as "" if it isn't legible or isn't on the ticket — never guess o
 
     let parsed: unknown;
     try {
-      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      const match = textBlock.text.match(/\[[\s\S]*\]/);
       parsed = JSON.parse(match ? match[0] : textBlock.text);
     } catch {
       return { error: "Couldn't parse the AI's response as JSON." };
     }
 
-    const normalized = normalize(parsed);
-    if (!normalized) return { error: "The AI's response didn't match the expected shape." };
+    const rawList = Array.isArray(parsed) ? parsed : [parsed];
+    const normalized = rawList.map(normalize).filter((t): t is ExtractedTicket => t !== null);
+    if (!normalized.length) return { error: "The AI's response didn't match the expected shape." };
 
     return { data: normalized };
   } catch (err) {

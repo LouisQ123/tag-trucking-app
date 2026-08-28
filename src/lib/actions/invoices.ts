@@ -115,6 +115,77 @@ export async function createInvoiceTicket(_prev: ActionState, formData: FormData
   redirect("/admin/invoices");
 }
 
+export interface CreateFromExtractionInput {
+  ticketNo: string;
+  date: string;
+  client: string;
+  locationProject: string;
+  truckNumber: string;
+  timeIn: string;
+  timeOut: string;
+  travelTimeHours: string;
+  totalHours: string;
+  loads: string;
+  rate: string;
+  towRate: string;
+  towCount: string;
+  scanPath: string;
+}
+
+// Same insert as createInvoiceTicket, but returns instead of redirecting —
+// for creating one of several tickets detected on a single scan, where a
+// redirect after the first one would abandon the rest of the review list.
+// The scan path is passed straight through (not re-uploaded): every ticket
+// pulled from the same scan shares that one file as its attachment.
+export async function createTicketFromExtraction(
+  input: CreateFromExtractionInput
+): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
+
+  const date = input.date.trim();
+  const client = input.client.trim();
+  if (!date || !client) return { error: "Date and client are required." };
+
+  const numOrNull = (v: string) => {
+    const t = v.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  };
+  const intOrNull = (v: string) => {
+    const n = numOrNull(v);
+    return n === null ? null : Math.round(n);
+  };
+
+  const supabase = await createClient();
+  const { data: inserted, error } = await supabase
+    .from("invoice_tickets")
+    .insert({
+      ticket_no: input.ticketNo.trim() || null,
+      date,
+      client,
+      location_project: input.locationProject.trim() || null,
+      truck_number: input.truckNumber.trim() || null,
+      company_name: "ATG Trucking LLC",
+      time_in: input.timeIn.trim() || null,
+      time_out: input.timeOut.trim() || null,
+      travel_time_hours: numOrNull(input.travelTimeHours),
+      total_hours: numOrNull(input.totalHours),
+      loads: intOrNull(input.loads),
+      rate: numOrNull(input.rate),
+      tow_rate: numOrNull(input.towRate),
+      tow_count: intOrNull(input.towCount),
+      scan_path: input.scanPath.trim() || null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !inserted) return { error: error?.message || "Couldn't create the ticket. Try again." };
+
+  revalidatePath("/admin/invoices");
+  return { id: inserted.id as string };
+}
+
 export async function updateInvoiceTicket(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
 

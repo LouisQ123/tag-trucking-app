@@ -13,9 +13,11 @@ import { extractTicketFromScan, type ExtractedTicket } from "@/lib/actions/ticke
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActionState } from "@/lib/actions/auth";
 import { TRUCK_NUMBERS } from "@/lib/loadOptions";
+import { computeTotalHours } from "@/lib/ticketMath";
 import TimeInput from "@/components/TimeInput";
 import DateInput from "@/components/DateInput";
 import ComboInput from "@/components/ComboInput";
+import ExtraTicketCard from "./ExtraTicketCard";
 import type { InvoiceTicket } from "@/lib/types/database";
 
 function todayISO() {
@@ -35,16 +37,6 @@ function parseISO(iso: string): Date | null {
 function dayOfWeek(iso: string): string {
   const d = parseISO(iso);
   return d ? d.toLocaleDateString(undefined, { weekday: "long" }) : "—";
-}
-
-function computeTotalHours(timeIn: string, timeOut: string, travel: string): number | null {
-  if (!timeIn || !timeOut) return null;
-  const [ih, im] = timeIn.split(":").map(Number);
-  const [oh, om] = timeOut.split(":").map(Number);
-  let diff = oh * 60 + om - (ih * 60 + im);
-  if (diff < 0) diff += 24 * 60;
-  const hours = Math.max(diff / 60 - (Number(travel) || 0), 0);
-  return Math.round(hours * 100) / 100;
 }
 
 function isImagePath(path: string): boolean {
@@ -89,6 +81,9 @@ export default function InvoiceEditor({
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractedBanner, setExtractedBanner] = useState(false);
+  // When a scan shows more than one ticket, the first fills this form as
+  // usual and the rest become their own reviewable/creatable cards.
+  const [extraTickets, setExtraTickets] = useState<ExtractedTicket[]>([]);
   // DateInput/TimeInput manage their own value internally and only read
   // `defaultValue` on mount, so applying extracted values requires forcing
   // a remount rather than just updating props.
@@ -152,6 +147,7 @@ export default function InvoiceEditor({
       setUploadError(null);
       setExtractError(null);
       setExtractedBanner(false);
+      setExtraTickets([]);
       setPendingScanPath(null);
       setPendingScanName(null);
       setFileInputKey((k) => k + 1);
@@ -179,7 +175,8 @@ export default function InvoiceEditor({
     }
   }
 
-  function applyExtracted(data: ExtractedTicket) {
+  function applyExtracted(tickets: ExtractedTicket[]) {
+    const [data, ...rest] = tickets;
     if (data.ticketNo) setTicketNo(data.ticketNo);
     if (data.date) setDate(data.date);
     if (data.client) onClientChange(data.client);
@@ -197,6 +194,7 @@ export default function InvoiceEditor({
     if (data.towCount) setTowCount(data.towCount);
     setFormResetKey((k) => k + 1);
     setExtractedBanner(true);
+    setExtraTickets(rest);
   }
 
   // Uploads straight from the browser to Supabase Storage — Vercel's
@@ -221,6 +219,7 @@ export default function InvoiceEditor({
     setUploadError(null);
     setExtractError(null);
     setExtractedBanner(false);
+    setExtraTickets([]);
     setUploadingScan(true);
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
     const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
@@ -255,6 +254,7 @@ export default function InvoiceEditor({
     setUploadError(null);
     setExtractError(null);
     setExtractedBanner(false);
+    setExtraTickets([]);
     setFileInputKey((k) => k + 1);
   }
 
@@ -511,10 +511,43 @@ export default function InvoiceEditor({
           {extractedBanner && !extractError && (
             <p className="text-sm font-semibold text-good">
               Extracted from the scan — please review the fields above before saving.
+              {extraTickets.length > 0 &&
+                ` This scan also has ${extraTickets.length} more ticket${extraTickets.length === 1 ? "" : "s"} on it — reviewable below.`}
             </p>
           )}
         </div>
       </Card>
+
+      {extraTickets.length > 0 && pendingScanPath && (
+        <Card
+          title={
+            <>
+              Other Tickets Found on This Scan
+              <span className="ml-1.5 bg-accent-dim text-accent text-[10.5px] font-extrabold px-1.5 py-0.5 rounded-full">
+                {extraTickets.length}
+              </span>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-[12.5px] text-ink-2">
+              Each of these creates its own separate ticket, sharing this same scan as its attachment. Review and
+              adjust before creating — nothing here saves automatically.
+            </p>
+            {extraTickets.map((t, i) => (
+              <ExtraTicketCard
+                key={i}
+                index={i + 2}
+                initial={t}
+                scanPath={pendingScanPath}
+                clientSuggestions={clientSuggestions}
+                locationSuggestions={locationSuggestions}
+                clientDefaultRates={clientDefaultRates}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
 
       {invoicedLabel && (
         <div className="rounded-lg bg-accent-dim border border-accent/30 text-sm font-semibold text-accent px-4 py-3">
