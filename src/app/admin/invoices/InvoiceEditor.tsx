@@ -9,6 +9,7 @@ import {
   deleteInvoiceTicket,
   removeTicketScan,
 } from "@/lib/actions/invoices";
+import { extractTicketFromScan, type ExtractedTicket } from "@/lib/actions/ticketScanExtraction";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActionState } from "@/lib/actions/auth";
 import { TRUCK_NUMBERS } from "@/lib/loadOptions";
@@ -85,6 +86,13 @@ export default function InvoiceEditor({
   const [pendingScanPath, setPendingScanPath] = useState<string | null>(null);
   const [pendingScanName, setPendingScanName] = useState<string | null>(null);
   const hasScan = !!ticket?.scan_path && !scanRemoved;
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractedBanner, setExtractedBanner] = useState(false);
+  // DateInput/TimeInput manage their own value internally and only read
+  // `defaultValue` on mount, so applying extracted values requires forcing
+  // a remount rather than just updating props.
+  const [formResetKey, setFormResetKey] = useState(0);
 
   const [ticketNo, setTicketNo] = useState(ticket?.ticket_no ?? "");
   const [date, setDate] = useState(ticket?.date ?? todayISO());
@@ -142,6 +150,8 @@ export default function InvoiceEditor({
       setScanRemoved(false);
       setScanTooLarge(false);
       setUploadError(null);
+      setExtractError(null);
+      setExtractedBanner(false);
       setPendingScanPath(null);
       setPendingScanName(null);
       setFileInputKey((k) => k + 1);
@@ -169,10 +179,32 @@ export default function InvoiceEditor({
     }
   }
 
+  function applyExtracted(data: ExtractedTicket) {
+    if (data.ticketNo) setTicketNo(data.ticketNo);
+    if (data.date) setDate(data.date);
+    if (data.client) onClientChange(data.client);
+    if (data.locationProject) setLocationProject(data.locationProject);
+    if (data.truckNumber) setTruck(data.truckNumber);
+    if (data.timeIn) setTimeIn(data.timeIn);
+    if (data.timeOut) setTimeOut(data.timeOut);
+    if (data.travelTimeHours) setTravelTime(data.travelTimeHours);
+    if (data.loads) setLoads(data.loads);
+    if (data.rate) {
+      setRateTouched(true);
+      setRate(data.rate);
+    }
+    if (data.towRate) setTowRate(data.towRate);
+    if (data.towCount) setTowCount(data.towCount);
+    setFormResetKey((k) => k + 1);
+    setExtractedBanner(true);
+  }
+
   // Uploads straight from the browser to Supabase Storage — Vercel's
   // serverless functions cap request bodies well under a real phone photo
   // or scanned PDF, so the file bytes must never round-trip through our
   // own server. The Server Action only ever receives the resulting path.
+  // Once uploaded, the same scan is also read by Claude to auto-fill the
+  // rest of the form — the admin still reviews everything before saving.
   async function onScanChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -187,6 +219,8 @@ export default function InvoiceEditor({
 
     setScanTooLarge(false);
     setUploadError(null);
+    setExtractError(null);
+    setExtractedBanner(false);
     setUploadingScan(true);
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
     const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
@@ -198,17 +232,29 @@ export default function InvoiceEditor({
       setPendingScanPath(null);
       setPendingScanName(null);
       e.target.value = "";
-    } else {
-      setPendingScanPath(path);
-      setPendingScanName(file.name);
+      setUploadingScan(false);
+      return;
     }
+    setPendingScanPath(path);
+    setPendingScanName(file.name);
     setUploadingScan(false);
+
+    setExtracting(true);
+    const result = await extractTicketFromScan(path, clientSuggestions);
+    setExtracting(false);
+    if (result.error || !result.data) {
+      setExtractError(result.error || "Extraction failed.");
+      return;
+    }
+    applyExtracted(result.data);
   }
 
   function clearPendingScan() {
     setPendingScanPath(null);
     setPendingScanName(null);
     setUploadError(null);
+    setExtractError(null);
+    setExtractedBanner(false);
     setFileInputKey((k) => k + 1);
   }
 
@@ -239,7 +285,7 @@ export default function InvoiceEditor({
       <Card title="Ticket">
         <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3.5">
           <Field label="Date">
-            <DateInput name="date" defaultValue={date} onChange={setDate} required />
+            <DateInput key={formResetKey} name="date" defaultValue={date} onChange={setDate} required />
           </Field>
           <Field label="Day">
             <div className="input flex items-center text-ink-2">{dayOfWeek(date)}</div>
@@ -298,10 +344,10 @@ export default function InvoiceEditor({
       <Card title="Time">
         <div className="flex flex-col sm:grid sm:grid-cols-4 gap-3.5">
           <Field label="Time In">
-            <TimeInput name="time_in" defaultValue={timeIn} onChange={setTimeIn} />
+            <TimeInput key={formResetKey} name="time_in" defaultValue={timeIn} onChange={setTimeIn} />
           </Field>
           <Field label="Time Out">
-            <TimeInput name="time_out" defaultValue={timeOut} onChange={setTimeOut} />
+            <TimeInput key={formResetKey} name="time_out" defaultValue={timeOut} onChange={setTimeOut} />
           </Field>
           <Field label="Travel Time (hrs)">
             <input
@@ -423,14 +469,14 @@ export default function InvoiceEditor({
           )}
           <Field
             label={hasScan ? "Replace Scan" : "Upload Scan"}
-            hint="A photo or PDF of the original paper ticket, up to 20MB"
+            hint="A photo or PDF of the original paper ticket, up to 20MB — the form below fills in automatically, review before saving"
           >
             <input
               key={fileInputKey}
               type="file"
               accept="image/*,application/pdf"
               onChange={onScanChange}
-              disabled={uploadingScan}
+              disabled={uploadingScan || extracting}
               className="input"
             />
           </Field>
@@ -457,6 +503,15 @@ export default function InvoiceEditor({
                 Clear
               </button>
             </div>
+          )}
+          {extracting && <p className="text-sm font-semibold text-ink-2">Reading the ticket…</p>}
+          {extractError && (
+            <p className="text-sm font-semibold text-critical">AI extraction failed: {extractError}</p>
+          )}
+          {extractedBanner && !extractError && (
+            <p className="text-sm font-semibold text-good">
+              Extracted from the scan — please review the fields above before saving.
+            </p>
           )}
         </div>
       </Card>
@@ -486,10 +541,18 @@ export default function InvoiceEditor({
           {saved && <span className="text-sm font-semibold text-good">Saved.</span>}
           <button
             type="submit"
-            disabled={pending || uploadingScan}
+            disabled={pending || uploadingScan || extracting}
             className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
           >
-            {pending ? "Saving…" : uploadingScan ? "Uploading scan…" : ticket ? "Save Changes" : "Create Ticket"}
+            {pending
+              ? "Saving…"
+              : uploadingScan
+                ? "Uploading scan…"
+                : extracting
+                  ? "Reading ticket…"
+                  : ticket
+                    ? "Save Changes"
+                    : "Create Ticket"}
           </button>
         </div>
       </div>
