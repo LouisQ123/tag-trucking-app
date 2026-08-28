@@ -69,3 +69,29 @@ export function formatSubmitBy(invoiceDate: string): string {
     day: "numeric",
   });
 }
+
+// Today's calendar date in Eastern time as "YYYY-MM-DD" — for anything that
+// needs "today" as a plain date column value (e.g. a server-generated
+// invoice's date) computed the same Eastern-anchored way as the rest of
+// this file, rather than the server's own (UTC, on Vercel) local date.
+export function todayEasternISO(): string {
+  const { y, m, d } = toEasternYmd(new Date());
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function ordinalToISO(ordinal: number): string {
+  const d = new Date(ordinal);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+// The current Mon–Sun work week's boundaries (Eastern time, based on
+// today), as "YYYY-MM-DD" strings — for filtering which tickets/records
+// belong to "this week" (e.g. the Friday auto-invoice job).
+export function currentWorkWeekRange(): { startISO: string; endISO: string } {
+  const todayOrdinal = ymdToOrdinal(toEasternYmd(new Date()));
+  const weekday = new Date(todayOrdinal).getUTCDay(); // 0=Sun..6=Sat
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
+  const weekStartOrdinal = todayOrdinal + diffToMonday * DAY_MS;
+  const weekEndOrdinal = weekStartOrdinal + 6 * DAY_MS;
+  return { startISO: ordinalToISO(weekStartOrdinal), endISO: ordinalToISO(weekEndOrdinal) };
+}

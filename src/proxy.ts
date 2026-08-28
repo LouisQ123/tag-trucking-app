@@ -1,7 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// /api/cron isn't "public" content — it's a machine-to-machine endpoint
+// that checks its own CRON_SECRET bearer token instead of a user session,
+// so it must be exempt from this session-based redirect (a real request
+// with no cookies would otherwise always bounce to /login).
+const PUBLIC_PATHS = ["/login", "/auth", "/api/cron"];
 
 export default async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
