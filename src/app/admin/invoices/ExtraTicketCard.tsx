@@ -47,6 +47,7 @@ export default function ExtraTicketCard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [attachedToInvoiceNo, setAttachedToInvoiceNo] = useState<string | null>(null);
   const [discarded, setDiscarded] = useState(false);
 
   const totalHours = useMemo(
@@ -89,6 +90,7 @@ export default function ExtraTicketCard({
       setError(result.error);
       return;
     }
+    setAttachedToInvoiceNo(result.attachedToInvoiceNo);
     setSaved(true);
   }
 
@@ -98,6 +100,7 @@ export default function ExtraTicketCard({
     return (
       <div className="rounded-lg border border-good/30 bg-good/10 px-4 py-3 text-sm font-semibold text-good">
         Ticket {index} created — #{ticketNo || "no ticket #"} for {client}.
+        {attachedToInvoiceNo && ` Added to this week's open draft invoice #${attachedToInvoiceNo}.`}
       </div>
     );
   }

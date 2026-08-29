@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { currentWorkWeekRange } from "@/lib/workWeek";
 import type { ActionState } from "@/lib/actions/auth";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -66,6 +67,49 @@ function ticketFields(formData: FormData) {
   };
 }
 
+// If this client already has an open (draft) invoice dated within the
+// current Mon–Sun work week, a newly created ticket for the same client and
+// week joins it automatically instead of sitting in the un-invoiced pool
+// until someone remembers to add it by hand — e.g. a ticket entered a few
+// days after that week's Friday auto-draft was already created. Silent
+// no-op if the ticket falls outside this week or no such draft exists; it
+// just becomes billable normally.
+async function autoAttachToOpenDraft(
+  supabase: Supabase,
+  ticketId: string,
+  clientName: string,
+  ticketDate: string
+): Promise<string | null> {
+  const { startISO, endISO } = currentWorkWeekRange();
+  if (ticketDate < startISO || ticketDate > endISO) return null;
+
+  const trimmedName = clientName.trim();
+  if (!trimmedName) return null;
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .ilike("name", trimmedName)
+    .maybeSingle();
+  if (!client) return null;
+
+  const { data: draft } = await supabase
+    .from("invoices")
+    .select("id, invoice_no")
+    .eq("client_id", client.id)
+    .eq("status", "draft")
+    .gte("date", startISO)
+    .lte("date", endISO)
+    .limit(1)
+    .maybeSingle();
+  if (!draft) return null;
+
+  const { error } = await supabase.from("invoice_tickets").update({ invoice_id: draft.id }).eq("id", ticketId);
+  if (error) return null;
+  await recomputeInvoiceTotal(supabase, draft.id);
+  return draft.invoice_no as string;
+}
+
 const SCAN_BUCKET = "ticket-scans";
 
 // The browser uploads the scan file straight to Storage (see InvoiceEditor)
@@ -111,6 +155,8 @@ export async function createInvoiceTicket(_prev: ActionState, formData: FormData
     return { error: scanError };
   }
 
+  await autoAttachToOpenDraft(supabase, inserted.id as string, fields.client, fields.date);
+
   revalidatePath("/admin/invoices");
   redirect("/admin/invoices");
 }
@@ -139,7 +185,7 @@ export interface CreateFromExtractionInput {
 // pulled from the same scan shares that one file as its attachment.
 export async function createTicketFromExtraction(
   input: CreateFromExtractionInput
-): Promise<{ id: string } | { error: string }> {
+): Promise<{ id: string; attachedToInvoiceNo: string | null } | { error: string }> {
   await requireAdmin();
 
   const date = input.date.trim();
@@ -182,8 +228,10 @@ export async function createTicketFromExtraction(
 
   if (error || !inserted) return { error: error?.message || "Couldn't create the ticket. Try again." };
 
+  const attachedToInvoiceNo = await autoAttachToOpenDraft(supabase, inserted.id as string, client, date);
+
   revalidatePath("/admin/invoices");
-  return { id: inserted.id as string };
+  return { id: inserted.id as string, attachedToInvoiceNo };
 }
 
 export async function updateInvoiceTicket(_prev: ActionState, formData: FormData): Promise<ActionState> {
