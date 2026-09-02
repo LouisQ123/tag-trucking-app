@@ -318,7 +318,12 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
   pdf.text("Thank you for your business!", pageWidth / 2, ty, { align: "center" });
 
   const fileName = `ATG-Trucking-Invoice-${input.invoiceNo}.pdf`;
-  const scanPaths = input.lines.map((l) => l.scanPath).filter((p): p is string => !!p);
+  // Multiple tickets pulled from one multi-ticket scan upload all share the
+  // same scan_path — de-dupe so that one physical scan is only attached
+  // once, not once per ticket billed from it.
+  const scanPaths = Array.from(
+    new Set(input.lines.map((l) => l.scanPath).filter((p): p is string => !!p))
+  );
   if (!scanPaths.length) {
     pdf.save(fileName);
     return;
