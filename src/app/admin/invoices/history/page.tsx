@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Invoice } from "@/lib/types/database";
-import { isBadgeActive, formatSubmitBy } from "@/lib/workWeek";
+import { isBadgeActive, formatSubmitBy, isInvoiceOverdue } from "@/lib/workWeek";
 import InvoiceHistoryTable, { type InvoiceRow } from "./InvoiceHistoryTable";
 
 export default async function InvoiceHistoryPage() {
@@ -28,6 +28,7 @@ export default async function InvoiceHistoryPage() {
     ticketCount: ticketCountByInvoice.get(inv.id) ?? 0,
     isNew: isBadgeActive(inv.date),
     submitByLabel: formatSubmitBy(inv.date),
+    isOverdue: isInvoiceOverdue(inv.date, inv.terms, inv.status),
   }));
 
   return (

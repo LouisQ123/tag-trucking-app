@@ -23,6 +23,7 @@ export interface InvoiceRow extends Invoice {
   ticketCount: number;
   isNew: boolean;
   submitByLabel: string;
+  isOverdue: boolean;
 }
 
 type SortKey = "date" | "client";
@@ -109,22 +110,29 @@ export default function InvoiceHistoryTable({ rows }: { rows: InvoiceRow[] }) {
                 <td className="px-4 py-3 tabular-nums">{inv.ticketCount}</td>
                 <td className="px-4 py-3 text-right font-bold tabular-nums">{currency(inv.total)}</td>
                 <td className="px-4 py-3">
-                  {inv.status === "paid" ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-good">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      Paid{inv.check_number ? ` · Chk #${inv.check_number}` : ""}
-                    </span>
-                  ) : inv.status === "draft" ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-muted">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      Draft
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-warning">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      Pending
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    {inv.status === "paid" ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-good">
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        Paid{inv.check_number ? ` · Chk #${inv.check_number}` : ""}
+                      </span>
+                    ) : inv.status === "draft" ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-muted">
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        Draft
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-warning">
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        Pending
+                      </span>
+                    )}
+                    {inv.isOverdue && (
+                      <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-critical bg-critical/10 rounded px-1.5 py-0.5">
+                        Overdue
+                      </span>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -95,3 +95,25 @@ export function currentWorkWeekRange(): { startISO: string; endISO: string } {
   const weekEndOrdinal = weekStartOrdinal + 6 * DAY_MS;
   return { startISO: ordinalToISO(weekStartOrdinal), endISO: ordinalToISO(weekEndOrdinal) };
 }
+
+// "terms" is free text like "Net 30 days" (editable per invoice) — pull out
+// the first number as the payment window, falling back to 30 if it can't be
+// parsed (e.g. "Due on receipt").
+function parseTermsDays(terms: string): number {
+  const match = terms.match(/\d+/);
+  if (!match) return 30;
+  const n = Number(match[0]);
+  return Number.isFinite(n) && n > 0 ? n : 30;
+}
+
+// An invoice is overdue once its payment terms have lapsed and it's still
+// unpaid — a draft hasn't been sent yet, and a paid invoice is resolved, so
+// only "pending" invoices are ever overdue.
+export function isInvoiceOverdue(invoiceDate: string, terms: string, status: string): boolean {
+  if (status !== "pending") return false;
+  const ymd = parseIsoDate(invoiceDate);
+  if (!ymd) return false;
+  const dueOrdinal = ymdToOrdinal(ymd) + parseTermsDays(terms) * DAY_MS;
+  const todayOrdinal = ymdToOrdinal(toEasternYmd(new Date()));
+  return todayOrdinal > dueOrdinal;
+}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Client, Invoice } from "@/lib/types/database";
-import { isBadgeActive, formatSubmitBy } from "@/lib/workWeek";
+import { isBadgeActive, formatSubmitBy, isInvoiceOverdue } from "@/lib/workWeek";
 import AddOldInvoiceForm from "./AddOldInvoiceForm";
 
 function parseISO(iso: string): Date | null {
@@ -138,17 +138,24 @@ export default async function BalancesPage() {
                         </td>
                         <td className="px-4 py-2.5 tabular-nums">{fmtDate(inv.date)}</td>
                         <td className="px-4 py-2.5">
-                          {inv.status === "paid" ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-good">
-                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                              Paid
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-warning">
-                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                              Pending
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            {inv.status === "paid" ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-good">
+                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                Paid
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-warning">
+                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                Pending
+                              </span>
+                            )}
+                            {isInvoiceOverdue(inv.date, inv.terms, inv.status) && (
+                              <span className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-wide text-critical bg-critical/10 rounded px-1.5 py-0.5">
+                                Overdue
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2.5 text-ink-2 tabular-nums">{inv.check_number ?? "—"}</td>
                         <td className="px-4 py-2.5 text-ink-2 tabular-nums">{fmtDate(inv.check_received_date)}</td>
