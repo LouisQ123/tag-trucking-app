@@ -361,7 +361,7 @@ export default function InvoiceEditor({
               className="input"
             />
           </Field>
-          <Field label="Total Hours" hint="Time out − time in − travel">
+          <Field label="Total Hours" hint="Time out − time in + travel">
             <div className="font-bold text-accent text-[15px] py-2 tabular-nums">
               {totalHours !== null ? totalHours : "—"}
             </div>

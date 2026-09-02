@@ -218,6 +218,7 @@ export default function GenerateInvoiceForm({
             ticketNo: t.ticket_no,
             truckNumber: t.truck_number,
             hours: t.total_hours ?? 0,
+            travelTimeHours: t.travel_time_hours,
             rate: t.rate,
             towAmount: towAmount(t),
             scanPath: t.scan_path,

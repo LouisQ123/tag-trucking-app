@@ -87,6 +87,7 @@ export interface InvoiceLineItem {
   ticketNo: string | null;
   truckNumber: string | null;
   hours: number;
+  travelTimeHours: number | null;
   rate: number | null;
   towAmount: number | null;
   scanPath: string | null;
@@ -247,10 +248,13 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
     0
   );
 
-  // Skip the Tow column entirely when nothing on this invoice has a tow
-  // reimbursement — a column of dashes isn't worth the width.
+  // Skip the Travel/Tow columns entirely when nothing on this invoice has
+  // one — a column of dashes isn't worth the width.
+  const hasTravel = input.lines.some((l) => l.travelTimeHours !== null && l.travelTimeHours > 0);
   const hasTow = input.lines.some((l) => l.towAmount !== null);
-  const head = ["Date", "Ticket #", "Truck #", "Hours", "Rate", "Amount"];
+  const head = ["Date", "Ticket #", "Truck #", "Hours"];
+  if (hasTravel) head.push("Travel");
+  head.push("Rate", "Amount");
   if (hasTow) head.push("Tow");
 
   autoTable(pdf, {
@@ -263,9 +267,12 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
         l.ticketNo ?? "",
         l.truckNumber ?? "",
         l.hours.toLocaleString(),
-        l.rate !== null ? currency(l.rate) : "—",
-        l.rate !== null ? currency(l.hours * l.rate) : "—",
       ];
+      if (hasTravel) row.push(l.travelTimeHours ? l.travelTimeHours.toLocaleString() : "—");
+      row.push(
+        l.rate !== null ? currency(l.rate) : "—",
+        l.rate !== null ? currency(l.hours * l.rate) : "—"
+      );
       if (hasTow) row.push(l.towAmount !== null ? currency(l.towAmount) : "—");
       return row;
     }),
