@@ -9,7 +9,9 @@ import {
   deleteInvoiceTicket,
   removeTicketScan,
 } from "@/lib/actions/invoices";
-import { extractTicketFromScan, type ExtractedTicket } from "@/lib/actions/ticketScanExtraction";
+import type { ExtractedTicket } from "@/lib/actions/ticketScanExtraction";
+import { compressScanFile } from "@/lib/scanCompression";
+import { extractTicketsFromScan } from "@/lib/scanExtraction";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActionState } from "@/lib/actions/auth";
 import { TRUCK_NUMBERS } from "@/lib/loadOptions";
@@ -74,6 +76,7 @@ export default function InvoiceEditor({
   const [fileInputKey, setFileInputKey] = useState(0);
   const [scanTooLarge, setScanTooLarge] = useState(false);
   const [uploadingScan, setUploadingScan] = useState(false);
+  const [compressingScan, setCompressingScan] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [pendingScanPath, setPendingScanPath] = useState<string | null>(null);
   const [pendingScanName, setPendingScanName] = useState<string | null>(null);
@@ -204,8 +207,18 @@ export default function InvoiceEditor({
   // Once uploaded, the same scan is also read by Claude to auto-fill the
   // rest of the form — the admin still reviews everything before saving.
   async function onScanChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
+
+    setScanTooLarge(false);
+    setUploadError(null);
+    setExtractError(null);
+    setExtractedBanner(false);
+    setExtraTickets([]);
+
+    setCompressingScan(true);
+    const file = await compressScanFile(rawFile);
+    setCompressingScan(false);
 
     if (file.size > MAX_SCAN_BYTES) {
       setScanTooLarge(true);
@@ -215,11 +228,6 @@ export default function InvoiceEditor({
       return;
     }
 
-    setScanTooLarge(false);
-    setUploadError(null);
-    setExtractError(null);
-    setExtractedBanner(false);
-    setExtraTickets([]);
     setUploadingScan(true);
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
     const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
@@ -239,7 +247,7 @@ export default function InvoiceEditor({
     setUploadingScan(false);
 
     setExtracting(true);
-    const result = await extractTicketFromScan(path, clientSuggestions);
+    const result = await extractTicketsFromScan(supabaseBrowser, rawFile, path, clientSuggestions);
     setExtracting(false);
     if (result.error || !result.data) {
       setExtractError(result.error || "Extraction failed.");
@@ -469,23 +477,24 @@ export default function InvoiceEditor({
           )}
           <Field
             label={hasScan ? "Replace Scan" : "Upload Scan"}
-            hint="A photo or PDF of the original paper ticket, up to 20MB — the form below fills in automatically, review before saving"
+            hint="A photo or PDF of the original paper ticket — large files are compressed automatically, the form below fills in automatically, review before saving"
           >
             <input
               key={fileInputKey}
               type="file"
               accept="image/*,application/pdf"
               onChange={onScanChange}
-              disabled={uploadingScan || extracting}
+              disabled={compressingScan || uploadingScan || extracting}
               className="input"
             />
           </Field>
           <input type="hidden" name="scan_path" value={pendingScanPath ?? ""} />
           {scanTooLarge && (
             <p className="text-sm font-semibold text-critical">
-              That file is over 20MB — pick a smaller photo or PDF.
+              That file is still over 20MB after compression — pick a smaller photo or PDF.
             </p>
           )}
+          {compressingScan && <p className="text-sm font-semibold text-ink-2">Compressing scan…</p>}
           {uploadingScan && <p className="text-sm font-semibold text-ink-2">Uploading…</p>}
           {uploadError && (
             <p className="text-sm font-semibold text-critical">Upload failed: {uploadError}</p>
@@ -574,18 +583,20 @@ export default function InvoiceEditor({
           {saved && <span className="text-sm font-semibold text-good">Saved.</span>}
           <button
             type="submit"
-            disabled={pending || uploadingScan || extracting}
+            disabled={pending || compressingScan || uploadingScan || extracting}
             className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-6 py-2.5 disabled:opacity-60"
           >
             {pending
               ? "Saving…"
-              : uploadingScan
-                ? "Uploading scan…"
-                : extracting
-                  ? "Reading ticket…"
-                  : ticket
-                    ? "Save Changes"
-                    : "Create Ticket"}
+              : compressingScan
+                ? "Compressing scan…"
+                : uploadingScan
+                  ? "Uploading scan…"
+                  : extracting
+                    ? "Reading ticket…"
+                    : ticket
+                      ? "Save Changes"
+                      : "Create Ticket"}
           </button>
         </div>
       </div>

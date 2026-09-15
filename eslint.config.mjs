@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored as-is from pdfjs-dist for client-side PDF rendering — not
+    // our source, shouldn't be linted as if it were.
+    "public/pdf.worker.min.mjs",
   ]),
 ]);
 

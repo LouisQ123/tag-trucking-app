@@ -36,10 +36,6 @@ function mediaTypeFromPath(path: string): SupportedMediaType {
   return "image/jpeg";
 }
 
-function isPdfPath(path: string): boolean {
-  return path.toLowerCase().endsWith(".pdf");
-}
-
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
@@ -63,15 +59,26 @@ function normalize(raw: unknown): ExtractedTicket | null {
   };
 }
 
-// The scan is already uploaded straight from the browser to Supabase
-// Storage by the time this runs (same body-size reasoning as sheet
-// photos) — this action just downloads those same bytes to hand to
-// Claude. Unlike sheet photos, the scan is NOT deleted afterward: it's
-// the permanent attachment already destined to be saved on the ticket.
-export async function extractTicketFromScan(path: string, knownClients: string[] = []): Promise<ExtractResult> {
+// Every path is downloaded and sent to Claude as a standalone image — never
+// as a PDF "document" block. Testing identical ticket content both ways
+// showed the document path gets downsampled far more aggressively
+// server-side, silently dropping small handwritten fields (ticket #,
+// client, truck #) that the same content reads correctly as an image. So a
+// multi-page PDF is rasterized into per-page images client-side first (see
+// scanCompression.ts) and each page is passed here as its own path.
+//
+// `cleanupAfter` deletes every path once the call finishes (success or
+// failure) — for the temporary per-page renders of a PDF upload, which
+// exist only to feed this call. It must stay false for a single photo's
+// own permanent scan_path, which is the ticket's saved attachment.
+export async function extractTicketsFromScanPages(
+  paths: string[],
+  knownClients: string[] = [],
+  options: { cleanupAfter?: boolean } = {}
+): Promise<ExtractResult> {
   await requireAdmin();
 
-  if (!path) return { error: "No scan to extract from." };
+  if (!paths.length) return { error: "No scan to extract from." };
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "AI extraction isn't configured — missing ANTHROPIC_API_KEY." };
@@ -79,22 +86,19 @@ export async function extractTicketFromScan(path: string, knownClients: string[]
   const supabase = await createClient();
 
   try {
-    const { data, error } = await supabase.storage.from(SCAN_BUCKET).download(path);
-    if (error || !data) return { error: `Couldn't load the uploaded scan: ${error?.message ?? "unknown error"}` };
-    const bytes = Buffer.from(await data.arrayBuffer());
-
-    const fileBlock: Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam = isPdfPath(path)
-      ? {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: bytes.toString("base64") },
-        }
-      : {
-          type: "image",
-          source: { type: "base64", media_type: mediaTypeFromPath(path), data: bytes.toString("base64") },
-        };
+    const imageBlocks: Anthropic.ImageBlockParam[] = [];
+    for (const path of paths) {
+      const { data, error } = await supabase.storage.from(SCAN_BUCKET).download(path);
+      if (error || !data) return { error: `Couldn't load the uploaded scan: ${error?.message ?? "unknown error"}` };
+      const bytes = Buffer.from(await data.arrayBuffer());
+      imageBlocks.push({
+        type: "image",
+        source: { type: "base64", media_type: mediaTypeFromPath(path), data: bytes.toString("base64") },
+      });
+    }
 
     const todayYear = new Date().getFullYear();
-    const prompt = `You are extracting data from a photo or scanned PDF of one or more physical trucking job tickets for ATG Trucking LLC. A single scan can show more than one distinct ticket (e.g. two tickets photographed side by side, or a multi-page PDF where each page is a different ticket) — read carefully and return ONLY a JSON array (no markdown fences, no commentary), with one object per distinct ticket found, in the order they appear. If only one ticket is present, return an array with exactly one object. Each object has exactly this shape:
+    const prompt = `You are extracting data from one or more photos of physical trucking job tickets for ATG Trucking LLC. Each image is one page — a single page can itself show more than one distinct ticket (e.g. two tickets side by side on a carbonless duplicate pad), and there can be anywhere from one page up to a full week's worth (5-10+) of pages. Read every image carefully and return ONLY a JSON array (no markdown fences, no commentary), with one object per distinct ticket found, in the order they appear across the images. Never skip or merge tickets to save space — include every one you can find. If only one ticket is present, return an array with exactly one object. Each object has exactly this shape:
 
 {
   "ticketNo": string,       // ticket/job number written on the ticket, "" if not present
@@ -122,11 +126,13 @@ Leave a field as "" if it isn't legible or isn't on a ticket — never guess or 
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 2048,
+      // A single scan can hold a full week's worth of tickets (5-10+), so
+      // this needs enough headroom for that many JSON objects, not just one.
+      max_tokens: 8192,
       messages: [
         {
           role: "user",
-          content: [fileBlock, { type: "text", text: prompt }],
+          content: [...imageBlocks, { type: "text", text: prompt }],
         },
       ],
     });
@@ -152,5 +158,9 @@ Leave a field as "" if it isn't legible or isn't on a ticket — never guess or 
     if (err instanceof Anthropic.RateLimitError) return { error: "AI extraction is rate-limited — try again shortly." };
     if (err instanceof Anthropic.APIError) return { error: `AI extraction failed: ${err.message}` };
     return { error: err instanceof Error ? err.message : "AI extraction failed." };
+  } finally {
+    if (options.cleanupAfter) {
+      await supabase.storage.from(SCAN_BUCKET).remove(paths);
+    }
   }
 }

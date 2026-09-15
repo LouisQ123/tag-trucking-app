@@ -43,6 +43,12 @@ export default async function InvoicesPage() {
             Generate Invoice
           </Link>
           <Link
+            href="/admin/invoices/bulk-upload"
+            className="rounded-lg border border-border text-ink font-bold text-sm px-4 py-2.5"
+          >
+            Bulk Upload
+          </Link>
+          <Link
             href="/admin/invoices/new"
             className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-4 py-2.5"
           >

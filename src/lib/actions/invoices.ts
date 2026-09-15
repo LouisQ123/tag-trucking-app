@@ -178,16 +178,14 @@ export interface CreateFromExtractionInput {
   scanPath: string;
 }
 
-// Same insert as createInvoiceTicket, but returns instead of redirecting —
-// for creating one of several tickets detected on a single scan, where a
-// redirect after the first one would abandon the rest of the review list.
-// The scan path is passed straight through (not re-uploaded): every ticket
-// pulled from the same scan shares that one file as its attachment.
-export async function createTicketFromExtraction(
+// Shared by both createTicketFromExtraction (one card at a time) and
+// createTicketsFromExtractions (a whole scan's worth saved in one click) —
+// the insert + auto-attach logic is identical either way, just called once
+// vs. in a loop.
+async function insertExtractedTicket(
+  supabase: Supabase,
   input: CreateFromExtractionInput
 ): Promise<{ id: string; attachedToInvoiceNo: string | null } | { error: string }> {
-  await requireAdmin();
-
   const date = input.date.trim();
   const client = input.client.trim();
   if (!date || !client) return { error: "Date and client are required." };
@@ -203,7 +201,6 @@ export async function createTicketFromExtraction(
     return n === null ? null : Math.round(n);
   };
 
-  const supabase = await createClient();
   const { data: inserted, error } = await supabase
     .from("invoice_tickets")
     .insert({
@@ -230,8 +227,44 @@ export async function createTicketFromExtraction(
 
   const attachedToInvoiceNo = await autoAttachToOpenDraft(supabase, inserted.id as string, client, date);
 
-  revalidatePath("/admin/invoices");
   return { id: inserted.id as string, attachedToInvoiceNo };
+}
+
+// Same insert as createInvoiceTicket, but returns instead of redirecting —
+// for creating one of several tickets detected on a single scan, where a
+// redirect after the first one would abandon the rest of the review list.
+// The scan path is passed straight through (not re-uploaded): every ticket
+// pulled from the same scan shares that one file as its attachment.
+export async function createTicketFromExtraction(
+  input: CreateFromExtractionInput
+): Promise<{ id: string; attachedToInvoiceNo: string | null } | { error: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const result = await insertExtractedTicket(supabase, input);
+  if (!("error" in result)) revalidatePath("/admin/invoices");
+  return result;
+}
+
+// Bulk counterpart for a scan holding many tickets at once (e.g. a week's
+// worth on one multi-page PDF) — saves the whole reviewed batch in one
+// click instead of one card at a time. Runs sequentially rather than in
+// parallel: several tickets for the same client/week can all auto-attach to
+// the same open draft invoice, and concurrent inserts would race on
+// recomputing that draft's total.
+export async function createTicketsFromExtractions(
+  inputs: CreateFromExtractionInput[]
+): Promise<Array<{ id: string; attachedToInvoiceNo: string | null } | { error: string }>> {
+  await requireAdmin();
+  if (!inputs.length) return [];
+
+  const supabase = await createClient();
+  const results: Array<{ id: string; attachedToInvoiceNo: string | null } | { error: string }> = [];
+  for (const input of inputs) {
+    results.push(await insertExtractedTicket(supabase, input));
+  }
+
+  revalidatePath("/admin/invoices");
+  return results;
 }
 
 export async function updateInvoiceTicket(_prev: ActionState, formData: FormData): Promise<ActionState> {
