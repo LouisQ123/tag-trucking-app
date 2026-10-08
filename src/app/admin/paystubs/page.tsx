@@ -1,0 +1,46 @@
+import { createClient } from "@/lib/supabase/server";
+import { buildPayStubs, type PayStubSheet, type RosterContact } from "@/lib/payStubs";
+import { addDaysISO, currentWorkWeekRange, workWeekStartOf } from "@/lib/workWeek";
+import PayStubsView from "./PayStubsView";
+
+export default async function PayStubsPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+  const { week } = await searchParams;
+  const weekStart = (week && workWeekStartOf(week)) || currentWorkWeekRange().startISO;
+  const weekEnd = addDaysISO(weekStart, 6);
+
+  // Year-to-date totals need every sheet from Jan 1 of the pay period's year.
+  const yearStart = `${weekEnd.slice(0, 4)}-01-01`;
+  const from = weekStart < yearStart ? weekStart : yearStart;
+
+  const supabase = await createClient();
+  const [{ data: sheets }, { data: roster }] = await Promise.all([
+    supabase
+      .from("production_sheets")
+      .select("driver_name, date, truck_number, hours, hourly_pay, labor_cost")
+      .is("deleted_at", null)
+      .gte("date", from)
+      .lte("date", weekEnd),
+    supabase.from("drivers").select("full_name, phone"),
+  ]);
+
+  const stubs = buildPayStubs((sheets ?? []) as PayStubSheet[], (roster ?? []) as RosterContact[], weekStart);
+
+  return (
+    <main className="max-w-4xl mx-auto px-5 py-7 flex flex-col gap-5">
+      <div>
+        <h1 className="text-xl font-extrabold tracking-tight">Pay Stubs</h1>
+        <p className="text-sm text-ink-2 mt-0.5">
+          1099 contractor pay statements for each Mon–Sun work week, built from the production sheets.
+        </p>
+      </div>
+      <PayStubsView
+        stubs={stubs}
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        prevWeek={addDaysISO(weekStart, -7)}
+        nextWeek={addDaysISO(weekStart, 7)}
+        isCurrentWeek={weekStart === currentWorkWeekRange().startISO}
+      />
+    </main>
+  );
+}

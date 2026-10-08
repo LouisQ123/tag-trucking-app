@@ -96,6 +96,22 @@ export function currentWorkWeekRange(): { startISO: string; endISO: string } {
   return { startISO: ordinalToISO(weekStartOrdinal), endISO: ordinalToISO(weekEndOrdinal) };
 }
 
+// The Monday of the Mon–Sun work week a plain "YYYY-MM-DD" date falls in.
+export function workWeekStartOf(dateISO: string): string | null {
+  const ymd = parseIsoDate(dateISO);
+  if (!ymd) return null;
+  const ordinal = ymdToOrdinal(ymd);
+  const weekday = new Date(ordinal).getUTCDay();
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
+  return ordinalToISO(ordinal + diffToMonday * DAY_MS);
+}
+
+export function addDaysISO(dateISO: string, days: number): string {
+  const ymd = parseIsoDate(dateISO);
+  if (!ymd) return dateISO;
+  return ordinalToISO(ymdToOrdinal(ymd) + days * DAY_MS);
+}
+
 // "terms" is free text like "Net 30 days" (editable per invoice) — pull out
 // the first number as the payment window, falling back to 30 if it can't be
 // parsed (e.g. "Due on receipt").

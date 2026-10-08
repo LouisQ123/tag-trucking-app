@@ -124,7 +124,7 @@ const SECTIONS: Section[] = [
         title: "Owner-operator / subcontractor payments",
         body: "Amounts paid to 1099 owner-operators for hauling — keep the 1099-NEC filings current, since these payments are only cleanly deductible with proper documentation.",
         example:
-          "Paying an owner-operator $85,000 for the year is fully deductible as a subcontractor expense, but it also triggers a 1099-NEC filing requirement — required once payments to one payee cross $600 for the year.",
+          "Paying an owner-operator $85,000 for the year is fully deductible as a subcontractor expense, but it also triggers a 1099-NEC filing requirement — required once payments to one payee cross the IRS reporting threshold for the year (historically $600, but raised for payments made after 2025 — confirm the current figure).",
       },
       {
         title: "Employee benefits",

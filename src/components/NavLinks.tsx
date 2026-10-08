@@ -9,6 +9,7 @@ export const NAV_LINKS = [
   { href: "/admin/balances", label: "Balances" },
   { href: "/admin/clients", label: "Clients" },
   { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/paystubs", label: "Pay Stubs" },
   { href: "/admin/roster", label: "Roster" },
   { href: "/admin/team", label: "Team" },
   { href: "/admin/tax-guide", label: "Tax Guide" },
