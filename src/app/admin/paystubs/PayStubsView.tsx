@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { PayStub } from "@/lib/payStubs";
 import { downloadPayStubsPdf } from "@/lib/payStubPdf";
+import { savePayStubCheck, savePayStubPriorPayments } from "@/lib/actions/payStubChecks";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -25,6 +26,7 @@ export default function PayStubsView({
   stubs,
   weekStart,
   weekEnd,
+  year,
   prevWeek,
   nextWeek,
   isCurrentWeek,
@@ -32,18 +34,78 @@ export default function PayStubsView({
   stubs: PayStub[];
   weekStart: string;
   weekEnd: string;
+  year: number;
   prevWeek: string;
   nextWeek: string;
   isCurrentWeek: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // What's typed in each Check # box, and what's actually saved — a box saves
+  // when it loses focus, and only if it differs from what's already saved.
+  const [typed, setTyped] = useState<Record<string, string>>(() =>
+    Object.fromEntries(stubs.map((s) => [s.driverKey, s.checkNumber]))
+  );
+  const [saved, setSaved] = useState<Record<string, string>>(() =>
+    Object.fromEntries(stubs.map((s) => [s.driverKey, s.checkNumber]))
+  );
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  // Prior payments: the box holds text while typing; `priorSaved` is the
+  // last amount actually stored, which drives the YTD column and the PDF.
+  const fmtPrior = (n: number) => (n === 0 ? "" : String(n));
+  const [priorTyped, setPriorTyped] = useState<Record<string, string>>(() =>
+    Object.fromEntries(stubs.map((s) => [s.driverKey, fmtPrior(s.priorPayments)]))
+  );
+  const [priorSaved, setPriorSaved] = useState<Record<string, number>>(() =>
+    Object.fromEntries(stubs.map((s) => [s.driverKey, s.priorPayments]))
+  );
+  const [savingPriorKey, setSavingPriorKey] = useState<string | null>(null);
+
+  async function commitPrior(s: PayStub) {
+    const text = priorTyped[s.driverKey] ?? "";
+    setSavingPriorKey(s.driverKey);
+    setError(null);
+    const result = await savePayStubPriorPayments(s.driverKey, year, text);
+    setSavingPriorKey(null);
+    if ("error" in result) {
+      setError(`Couldn't save prior payments for ${s.driverName}: ${result.error}`);
+      return;
+    }
+    setPriorSaved((prev) => ({ ...prev, [s.driverKey]: result.amount }));
+    setPriorTyped((prev) => ({ ...prev, [s.driverKey]: fmtPrior(result.amount) }));
+  }
+
+  const withEdits = (s: PayStub): PayStub => {
+    const prior = priorSaved[s.driverKey] ?? 0;
+    return {
+      ...s,
+      checkNumber: (typed[s.driverKey] ?? "").trim(),
+      priorPayments: prior,
+      ytdGross: Math.round((s.ytdSheetsGross + prior) * 100) / 100,
+    };
+  };
+
+  async function commitCheck(s: PayStub) {
+    const value = (typed[s.driverKey] ?? "").trim();
+    if (value === (saved[s.driverKey] ?? "")) return;
+    setSavingKey(s.driverKey);
+    setError(null);
+    const result = await savePayStubCheck(s.driverKey, weekStart, value);
+    setSavingKey(null);
+    if ("error" in result) {
+      setError(`Couldn't save the check number for ${s.driverName}: ${result.error}`);
+      return;
+    }
+    setSaved((prev) => ({ ...prev, [s.driverKey]: value }));
+    setTyped((prev) => ({ ...prev, [s.driverKey]: value }));
+  }
 
   async function download(key: string, list: PayStub[]) {
     setBusy(key);
     setError(null);
     try {
-      await downloadPayStubsPdf(list);
+      await downloadPayStubsPdf(list.map(withEdits));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't generate the PDF.");
     } finally {
@@ -111,14 +173,16 @@ export default function PayStubsView({
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm min-w-[860px]">
             <thead>
               <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                 <th className="px-4 py-2.5">Contractor</th>
                 <th className="px-4 py-2.5 text-right">Shifts</th>
                 <th className="px-4 py-2.5 text-right">Hours</th>
                 <th className="px-4 py-2.5 text-right">Gross pay</th>
+                <th className="px-4 py-2.5">Paid earlier {year}</th>
                 <th className="px-4 py-2.5 text-right">YTD gross</th>
+                <th className="px-4 py-2.5">Check #</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -136,7 +200,55 @@ export default function PayStubsView({
                   <td className="px-4 py-3 text-right tabular-nums">{s.lines.length}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{s.totalHours}</td>
                   <td className="px-4 py-3 text-right font-bold tabular-nums">{currency(s.grossPay)}</td>
-                  <td className="px-4 py-3 text-right text-ink-2 tabular-nums">{currency(s.ytdGross)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={priorTyped[s.driverKey] ?? ""}
+                        onChange={(e) => setPriorTyped((prev) => ({ ...prev, [s.driverKey]: e.target.value }))}
+                        onBlur={() => {
+                          const typedText = (priorTyped[s.driverKey] ?? "").replace(/[$,\s]/g, "");
+                          const savedText = fmtPrior(priorSaved[s.driverKey] ?? 0);
+                          if (typedText !== savedText) commitPrior(s);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
+                        inputMode="decimal"
+                        placeholder="$0.00"
+                        aria-label={`Payments earlier in ${year} for ${s.driverName}`}
+                        className="input-sm w-28"
+                      />
+                      {savingPriorKey === s.driverKey && (
+                        <span className="text-[11px] font-semibold text-muted">Saving…</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right text-ink-2 tabular-nums">
+                    {currency(s.ytdSheetsGross + (priorSaved[s.driverKey] ?? 0))}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={typed[s.driverKey] ?? ""}
+                        onChange={(e) => setTyped((prev) => ({ ...prev, [s.driverKey]: e.target.value }))}
+                        onBlur={() => commitCheck(s)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
+                        placeholder="—"
+                        aria-label={`Check number for ${s.driverName}`}
+                        className="input-sm w-24"
+                      />
+                      {savingKey === s.driverKey ? (
+                        <span className="text-[11px] font-semibold text-muted">Saving…</span>
+                      ) : (
+                        (saved[s.driverKey] ?? "") !== "" &&
+                        saved[s.driverKey] === (typed[s.driverKey] ?? "").trim() && (
+                          <span className="text-[11px] font-bold text-good">Saved</span>
+                        )
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
@@ -151,7 +263,7 @@ export default function PayStubsView({
               ))}
               {!stubs.length && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-ink-2">
+                  <td colSpan={8} className="px-4 py-10 text-center text-ink-2">
                     No production sheets logged for this work week.
                   </td>
                 </tr>
@@ -164,7 +276,7 @@ export default function PayStubsView({
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">{Math.round(totalHours * 100) / 100}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{currency(totalGross)}</td>
-                  <td className="px-4 py-3" colSpan={2} />
+                  <td className="px-4 py-3" colSpan={4} />
                 </tr>
               </tfoot>
             )}

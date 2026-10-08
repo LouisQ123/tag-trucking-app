@@ -24,6 +24,8 @@ export interface PayStubLine {
 
 export interface PayStub {
   driverName: string;
+  driverKey: string;
+  checkNumber: string;
   phone: string | null;
   weekStart: string;
   weekEnd: string;
@@ -35,7 +37,17 @@ export interface PayStub {
   // exactly what's unpaid-for rather than a silently wrong total.
   missingRateCount: number;
   ytdHours: number;
+  // Calculated from the production sheets only.
+  ytdSheetsGross: number;
+  // Paid earlier in the year, before the app tracked it (entered by hand).
+  priorPayments: number;
+  // ytdSheetsGross + priorPayments.
   ytdGross: number;
+}
+
+// Stable identity for a driver across sheets (and for saved check numbers).
+export function driverKey(name: string): string {
+  return normalizeName(name);
 }
 
 function normalizeName(name: string): string {
@@ -70,7 +82,13 @@ function findContact(name: string, roster: RosterContact[]): RosterContact | nul
 // `sheets` must cover Jan 1 of the week's ending year (or the week's start,
 // if earlier) through the week's end, so the year-to-date totals can be
 // computed from the same list.
-export function buildPayStubs(sheets: PayStubSheet[], roster: RosterContact[], weekStart: string): PayStub[] {
+export function buildPayStubs(
+  sheets: PayStubSheet[],
+  roster: RosterContact[],
+  weekStart: string,
+  checks: Record<string, string> = {},
+  priors: Record<string, number> = {}
+): PayStub[] {
   const weekEnd = addDaysISO(weekStart, 6);
 
   const byDriver = new Map<string, { name: string; sheets: PayStubSheet[] }>();
@@ -83,7 +101,7 @@ export function buildPayStubs(sheets: PayStubSheet[], roster: RosterContact[], w
   }
 
   const stubs: PayStub[] = [];
-  for (const { name, sheets: driverSheets } of byDriver.values()) {
+  for (const [key, { name, sheets: driverSheets }] of byDriver.entries()) {
     const weekSheets = driverSheets.filter((s) => s.date >= weekStart && s.date <= weekEnd);
     if (!weekSheets.length) continue;
 
@@ -100,8 +118,13 @@ export function buildPayStubs(sheets: PayStubSheet[], roster: RosterContact[], w
     // Calendar year of the pay period's end, since that's when it's paid.
     const ytdSheets = driverSheets.filter((s) => s.date.slice(0, 4) === weekEnd.slice(0, 4));
 
+    const ytdSheetsGross = round2(ytdSheets.reduce((a, s) => a + (sheetAmount(s) ?? 0), 0));
+    const priorPayments = priors[key] ?? 0;
+
     stubs.push({
       driverName: name,
+      driverKey: key,
+      checkNumber: checks[key] ?? "",
       phone: findContact(name, roster)?.phone ?? null,
       weekStart,
       weekEnd,
@@ -110,7 +133,9 @@ export function buildPayStubs(sheets: PayStubSheet[], roster: RosterContact[], w
       grossPay: round2(lines.reduce((a, l) => a + (l.amount ?? 0), 0)),
       missingRateCount: lines.filter((l) => l.hours > 0 && l.amount === null).length,
       ytdHours: round2(ytdSheets.reduce((a, s) => a + (s.hours ?? 0), 0)),
-      ytdGross: round2(ytdSheets.reduce((a, s) => a + (sheetAmount(s) ?? 0), 0)),
+      ytdSheetsGross,
+      priorPayments,
+      ytdGross: round2(ytdSheetsGross + priorPayments),
     });
   }
 

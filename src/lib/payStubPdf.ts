@@ -1,5 +1,6 @@
-import { COMPANY_NAME, REMIT_TO_NAME, REMIT_TO_ADDRESS_LINE1, REMIT_TO_CITY_STATE_ZIP, REMIT_TO_PHONE } from "@/lib/companyInfo";
+import { REMIT_TO_NAME, REMIT_TO_ADDRESS_LINE1, REMIT_TO_CITY_STATE_ZIP, REMIT_TO_PHONE } from "@/lib/companyInfo";
 import type { PayStub } from "@/lib/payStubs";
+import { drawCompanyHeader } from "@/lib/invoicePdf";
 
 const PDF_INK = "#1a1a1a";
 const PDF_MUTED = "#6b6b6b";
@@ -50,10 +51,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
     let y = margin;
 
     // ---- Header ----
-    pdf.setFont("times", "bold");
-    pdf.setFontSize(19);
-    pdf.setTextColor(PDF_MAROON);
-    pdf.text(COMPANY_NAME, margin, y + 10);
+    drawCompanyHeader(pdf, margin, y);
 
     pdf.setFont("times", "normal");
     pdf.setFontSize(20);
@@ -118,7 +116,16 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
     pdf.setTextColor(PDF_MUTED);
     pdf.setFontSize(8.5);
     pdf.text("Monday – Sunday work week", rightX + 4, ry);
-    ry += 12;
+    ry += 14;
+    if (stub.checkNumber) {
+      bar(rightX, ry, rightW, "CHECK #");
+      ry += barH + 12;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(PDF_INK);
+      pdf.text(stub.checkNumber, rightX + 4, ry);
+      ry += 12;
+    }
 
     y = Math.max(ly, ry) + 14;
 
@@ -140,11 +147,6 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
       headStyles: { fillColor: PDF_MAROON, textColor: "#ffffff", fontStyle: "bold" },
       footStyles: { fillColor: "#ece9e1", textColor: PDF_INK, fontStyle: "bold" },
       alternateRowStyles: { fillColor: PDF_STRIPE },
-      columnStyles: {
-        2: { halign: "right" },
-        3: { halign: "right" },
-        4: { halign: "right" },
-      },
     });
 
     let ty = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
@@ -166,6 +168,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
     // ---- Summary ----
     ty += 14;
     const boxW = 250;
+    const valueOffset = 150;
     const boxX = pageWidth - margin - boxW;
     const rows: [string, string][] = [
       ["Gross pay this period", currency(stub.grossPay)],
@@ -185,7 +188,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
       pdf.setFontSize(last ? 11 : 9.5);
       pdf.setTextColor(PDF_INK);
       pdf.text(label, boxX + 8, ty);
-      pdf.text(value, boxX + boxW - 8, ty, { align: "right" });
+      pdf.text(value, boxX + valueOffset, ty);
       ty += last ? 0 : 15;
     });
     ty += 24;
@@ -197,15 +200,18 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
     pdf.setTextColor("#ffffff");
     pdf.text(`YEAR TO DATE (${stub.weekEnd.slice(0, 4)})`, boxX + 8, ty + barH - 5);
     ty += barH + 14;
-    [
-      ["Hours", stub.ytdHours.toLocaleString("en-US")],
-      ["Gross paid", currency(stub.ytdGross)],
-    ].forEach(([label, value]) => {
+    const ytdRows: [string, string][] = [["Hours", stub.ytdHours.toLocaleString("en-US")]];
+    if (stub.priorPayments !== 0) {
+      ytdRows.push(["Paid earlier this year", currency(stub.priorPayments)]);
+      ytdRows.push(["Paid via this app", currency(stub.ytdSheetsGross)]);
+    }
+    ytdRows.push(["Total gross paid", currency(stub.ytdGross)]);
+    ytdRows.forEach(([label, value]) => {
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9.5);
       pdf.setTextColor(PDF_INK);
       pdf.text(label, boxX + 8, ty);
-      pdf.text(value, boxX + boxW - 8, ty, { align: "right" });
+      pdf.text(value, boxX + valueOffset, ty);
       ty += 15;
     });
 

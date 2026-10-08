@@ -13,7 +13,8 @@ export default async function PayStubsPage({ searchParams }: { searchParams: Pro
   const from = weekStart < yearStart ? weekStart : yearStart;
 
   const supabase = await createClient();
-  const [{ data: sheets }, { data: roster }] = await Promise.all([
+  const year = Number(weekEnd.slice(0, 4));
+  const [{ data: sheets }, { data: roster }, { data: checkRows }, { data: priorRows }] = await Promise.all([
     supabase
       .from("production_sheets")
       .select("driver_name, date, truck_number, hours, hourly_pay, labor_cost")
@@ -21,9 +22,17 @@ export default async function PayStubsPage({ searchParams }: { searchParams: Pro
       .gte("date", from)
       .lte("date", weekEnd),
     supabase.from("drivers").select("full_name, phone"),
+    supabase.from("pay_stub_checks").select("driver_key, check_number").eq("week_start", weekStart),
+    supabase.from("pay_stub_prior_payments").select("driver_key, amount").eq("year", year),
   ]);
+  const priors = Object.fromEntries(
+    ((priorRows ?? []) as { driver_key: string; amount: number }[]).map((p) => [p.driver_key, Number(p.amount)])
+  );
+  const checks = Object.fromEntries(
+    ((checkRows ?? []) as { driver_key: string; check_number: string }[]).map((c) => [c.driver_key, c.check_number])
+  );
 
-  const stubs = buildPayStubs((sheets ?? []) as PayStubSheet[], (roster ?? []) as RosterContact[], weekStart);
+  const stubs = buildPayStubs((sheets ?? []) as PayStubSheet[], (roster ?? []) as RosterContact[], weekStart, checks, priors);
 
   return (
     <main className="max-w-4xl mx-auto px-5 py-7 flex flex-col gap-5">
@@ -34,9 +43,11 @@ export default async function PayStubsPage({ searchParams }: { searchParams: Pro
         </p>
       </div>
       <PayStubsView
+        key={weekStart}
         stubs={stubs}
         weekStart={weekStart}
         weekEnd={weekEnd}
+        year={year}
         prevWeek={addDaysISO(weekStart, -7)}
         nextWeek={addDaysISO(weekStart, 7)}
         isCurrentWeek={weekStart === currentWorkWeekRange().startISO}

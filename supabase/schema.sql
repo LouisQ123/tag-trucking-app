@@ -556,6 +556,56 @@ create policy sheet_photos_delete on storage.objects
   for delete using (bucket_id = 'sheet-photos' and public.is_admin());
 
 -- ============================================================
+-- 14b. PAY STUB CHECKS — the check number handed to a contractor for a
+--      given Mon-Sun work week. Keyed by the normalized driver name (the
+--      sheets' driver_name is free text) + the week's Monday.
+-- ============================================================
+create table if not exists public.pay_stub_checks (
+  id uuid primary key default gen_random_uuid(),
+  driver_key text not null,
+  week_start date not null,
+  check_number text not null,
+  created_at timestamptz not null default now(),
+  unique (driver_key, week_start)
+);
+
+alter table public.pay_stub_checks enable row level security;
+
+drop policy if exists pay_stub_checks_select on public.pay_stub_checks;
+create policy pay_stub_checks_select on public.pay_stub_checks for select using (public.is_admin());
+drop policy if exists pay_stub_checks_insert on public.pay_stub_checks;
+create policy pay_stub_checks_insert on public.pay_stub_checks for insert with check (public.is_admin());
+drop policy if exists pay_stub_checks_update on public.pay_stub_checks;
+create policy pay_stub_checks_update on public.pay_stub_checks for update using (public.is_admin());
+drop policy if exists pay_stub_checks_delete on public.pay_stub_checks;
+create policy pay_stub_checks_delete on public.pay_stub_checks for delete using (public.is_admin());
+
+-- ============================================================
+-- 14c. PAY STUB PRIOR PAYMENTS — what a contractor was already paid earlier
+--      in the year, before this app tracked it. Added on top of the
+--      year-to-date total calculated from the production sheets.
+-- ============================================================
+create table if not exists public.pay_stub_prior_payments (
+  id uuid primary key default gen_random_uuid(),
+  driver_key text not null,
+  year integer not null,
+  amount numeric(10, 2) not null,
+  created_at timestamptz not null default now(),
+  unique (driver_key, year)
+);
+
+alter table public.pay_stub_prior_payments enable row level security;
+
+drop policy if exists pay_stub_prior_select on public.pay_stub_prior_payments;
+create policy pay_stub_prior_select on public.pay_stub_prior_payments for select using (public.is_admin());
+drop policy if exists pay_stub_prior_insert on public.pay_stub_prior_payments;
+create policy pay_stub_prior_insert on public.pay_stub_prior_payments for insert with check (public.is_admin());
+drop policy if exists pay_stub_prior_update on public.pay_stub_prior_payments;
+create policy pay_stub_prior_update on public.pay_stub_prior_payments for update using (public.is_admin());
+drop policy if exists pay_stub_prior_delete on public.pay_stub_prior_payments;
+create policy pay_stub_prior_delete on public.pay_stub_prior_payments for delete using (public.is_admin());
+
+-- ============================================================
 -- 15. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication

@@ -82,6 +82,28 @@ function drawStar(
   pdf.lines(deltas, pts[0][0], pts[0][1], [1, 1], "F", true);
 }
 
+// "A ★ T ★ G ★ TRUCKING LLC" wordmark, shared by the invoice and pay stub
+// PDFs so both carry the identical header.
+export function drawCompanyHeader(pdf: import("jspdf").jsPDF, x: number, y: number) {
+  pdf.setFont("times", "bold");
+  pdf.setFontSize(19);
+  pdf.setTextColor(PDF_MAROON);
+  const headerY = y + 10;
+  const starGap = 3;
+  const starOuterR = 3.2;
+  const starInnerR = 1.3;
+  let hx = x;
+  ["A", "T", "G", "TRUCKING LLC"].forEach((part, i) => {
+    pdf.text(part, hx, headerY);
+    hx += pdf.getTextWidth(part);
+    if (i < 3) {
+      hx += starGap + starOuterR;
+      drawStar(pdf, hx, headerY - 5.5, starOuterR, starInnerR, PDF_MAROON);
+      hx += starOuterR + starGap;
+    }
+  });
+}
+
 export interface InvoiceLineItem {
   date: string;
   ticketNo: string | null;
@@ -127,26 +149,7 @@ export async function downloadInvoicePdf(input: InvoicePdfInput): Promise<void> 
   let y = margin;
 
   // ---- Header ----
-  pdf.setFont("times", "bold");
-  pdf.setFontSize(19);
-  pdf.setTextColor(PDF_MAROON);
-  {
-    const headerY = y + 10;
-    const starGap = 3;
-    const starOuterR = 3.2;
-    const starInnerR = 1.3;
-    let hx = margin;
-    ["A", "T", "G", "TRUCKING LLC"].forEach((part, i) => {
-      pdf.text(part, hx, headerY);
-      hx += pdf.getTextWidth(part);
-      if (i < 3) {
-        hx += starGap + starOuterR;
-        drawStar(pdf, hx, headerY - 5.5, starOuterR, starInnerR, PDF_MAROON);
-        hx += starOuterR + starGap;
-      }
-    });
-  }
-
+  drawCompanyHeader(pdf, margin, y);
   pdf.setFont("times", "normal");
   pdf.setFontSize(30);
   pdf.setTextColor(PDF_MAROON);
