@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Client } from "@/lib/types/database";
 import BulkUploadForm from "./BulkUploadForm";
 
+// A scan with several pages fires that many parallel AI extraction calls at
+// once from the extractTicketsFromScanPages server action — comfortably
+// under this on a normal connection, but this leaves headroom against the
+// platform's default (much shorter) function timeout on a slow network.
+export const maxDuration = 60;
+
 export default async function BulkUploadPage() {
   const supabase = await createClient();
   const [{ data }, { data: clients }] = await Promise.all([

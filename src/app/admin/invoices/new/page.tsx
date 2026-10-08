@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import type { Client } from "@/lib/types/database";
 import InvoiceEditor from "../InvoiceEditor";
 
+// A multi-page PDF scan fires that many parallel AI extraction calls from
+// the extractTicketsFromScanPages server action — headroom against the
+// platform's default (much shorter) function timeout on a slow network.
+export const maxDuration = 60;
+
 export default async function NewInvoiceTicketPage() {
   const supabase = await createClient();
   const [{ data }, { data: clients }] = await Promise.all([
