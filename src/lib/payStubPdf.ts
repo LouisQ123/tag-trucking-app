@@ -134,13 +134,21 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
       startY: y,
       margin: { left: margin, right: margin },
       head: [["Date", "Truck #", "Hours", "Rate", "Amount"]],
-      body: stub.lines.map((l) => [
-        fmtDate(l.date),
-        l.truck ?? "—",
-        l.hours.toLocaleString("en-US"),
-        l.rate !== null ? currency(l.rate) : "—",
-        l.amount !== null ? currency(l.amount) : "—",
-      ]),
+      body: stub.lines.map((l) => {
+        const tail = [
+          l.hours.toLocaleString("en-US"),
+          l.rate !== null ? currency(l.rate) : "—",
+          l.amount !== null ? currency(l.amount) : "—",
+        ];
+        // A manual adjustment has no date/truck — its label spans both.
+        if (l.adjustmentId) {
+          return [
+            { content: `Adjustment${l.note ? ` — ${l.note}` : ""}`, colSpan: 2, styles: { fontStyle: "italic" as const } },
+            ...tail,
+          ];
+        }
+        return [fmtDate(l.date), l.truck ?? "—", ...tail];
+      }),
       foot: [["Week total", "", stub.totalHours.toLocaleString("en-US"), "", currency(stub.grossPay)]],
       showFoot: "lastPage",
       styles: { font: "helvetica", fontSize: 9, textColor: PDF_INK, cellPadding: 6, lineColor: PDF_BORDER },
@@ -156,7 +164,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
       pdf.setFontSize(8.5);
       pdf.setTextColor(PDF_MUTED);
       pdf.text(
-        `${stub.missingRateCount} shift${stub.missingRateCount === 1 ? "" : "s"} had no pay rate recorded and ${
+        `${stub.missingRateCount} line${stub.missingRateCount === 1 ? "" : "s"} had no pay rate recorded and ${
           stub.missingRateCount === 1 ? "is" : "are"
         } not included in the amount above.`,
         margin,

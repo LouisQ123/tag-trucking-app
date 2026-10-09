@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { PayStub } from "@/lib/payStubs";
 import { downloadPayStubsPdf } from "@/lib/payStubPdf";
-import { savePayStubCheck, savePayStubPriorPayments } from "@/lib/actions/payStubChecks";
+import {
+  addPayStubAdjustment,
+  deletePayStubAdjustment,
+  savePayStubCheck,
+  savePayStubPriorPayments,
+} from "@/lib/actions/payStubChecks";
+import { driverKey } from "@/lib/payStubs";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -27,6 +34,7 @@ export default function PayStubsView({
   weekStart,
   weekEnd,
   year,
+  rosterNames,
   prevWeek,
   nextWeek,
   isCurrentWeek,
@@ -35,6 +43,7 @@ export default function PayStubsView({
   weekStart: string;
   weekEnd: string;
   year: number;
+  rosterNames: string[];
   prevWeek: string;
   nextWeek: string;
   isCurrentWeek: boolean;
@@ -63,7 +72,7 @@ export default function PayStubsView({
   const [savingPriorKey, setSavingPriorKey] = useState<string | null>(null);
 
   async function commitPrior(s: PayStub) {
-    const text = priorTyped[s.driverKey] ?? "";
+    const text = priorTyped[s.driverKey] ?? fmtPrior(s.priorPayments);
     setSavingPriorKey(s.driverKey);
     setError(null);
     const result = await savePayStubPriorPayments(s.driverKey, year, text);
@@ -76,19 +85,35 @@ export default function PayStubsView({
     setPriorTyped((prev) => ({ ...prev, [s.driverKey]: fmtPrior(result.amount) }));
   }
 
+  const router = useRouter();
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [extraDriver, setExtraDriver] = useState("");
+  const listedKeys = new Set(stubs.map((s) => s.driverKey));
+  const unlistedDrivers = rosterNames.filter((n) => !listedKeys.has(driverKey(n)));
+
+  async function removeAdjustment(id: string) {
+    setError(null);
+    const result = await deletePayStubAdjustment(id);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
   const withEdits = (s: PayStub): PayStub => {
-    const prior = priorSaved[s.driverKey] ?? 0;
+    const prior = priorSaved[s.driverKey] ?? s.priorPayments;
     return {
       ...s,
-      checkNumber: (typed[s.driverKey] ?? "").trim(),
+      checkNumber: (typed[s.driverKey] ?? s.checkNumber).trim(),
       priorPayments: prior,
       ytdGross: Math.round((s.ytdSheetsGross + prior) * 100) / 100,
     };
   };
 
   async function commitCheck(s: PayStub) {
-    const value = (typed[s.driverKey] ?? "").trim();
-    if (value === (saved[s.driverKey] ?? "")) return;
+    const value = (typed[s.driverKey] ?? s.checkNumber).trim();
+    if (value === (saved[s.driverKey] ?? s.checkNumber)) return;
     setSavingKey(s.driverKey);
     setError(null);
     const result = await savePayStubCheck(s.driverKey, weekStart, value);
@@ -187,8 +212,11 @@ export default function PayStubsView({
               </tr>
             </thead>
             <tbody>
-              {stubs.map((s) => (
-                <tr key={s.driverName} className="border-t border-grid hover:bg-surface-2">
+              {stubs.map((s) => {
+                const adjLines = s.lines.filter((l) => l.adjustmentId);
+                return (
+                <Fragment key={s.driverName}>
+                <tr className="border-t border-grid hover:bg-surface-2">
                   <td className="px-4 py-3 font-semibold">
                     {s.driverName}
                     {s.missingRateCount > 0 && (
@@ -203,11 +231,11 @@ export default function PayStubsView({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <input
-                        value={priorTyped[s.driverKey] ?? ""}
+                        value={priorTyped[s.driverKey] ?? fmtPrior(s.priorPayments)}
                         onChange={(e) => setPriorTyped((prev) => ({ ...prev, [s.driverKey]: e.target.value }))}
                         onBlur={() => {
-                          const typedText = (priorTyped[s.driverKey] ?? "").replace(/[$,\s]/g, "");
-                          const savedText = fmtPrior(priorSaved[s.driverKey] ?? 0);
+                          const typedText = (priorTyped[s.driverKey] ?? fmtPrior(s.priorPayments)).replace(/[$,\s]/g, "");
+                          const savedText = fmtPrior(priorSaved[s.driverKey] ?? s.priorPayments);
                           if (typedText !== savedText) commitPrior(s);
                         }}
                         onKeyDown={(e) => {
@@ -224,12 +252,12 @@ export default function PayStubsView({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right text-ink-2 tabular-nums">
-                    {currency(s.ytdSheetsGross + (priorSaved[s.driverKey] ?? 0))}
+                    {currency(s.ytdSheetsGross + (priorSaved[s.driverKey] ?? s.priorPayments))}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <input
-                        value={typed[s.driverKey] ?? ""}
+                        value={typed[s.driverKey] ?? s.checkNumber}
                         onChange={(e) => setTyped((prev) => ({ ...prev, [s.driverKey]: e.target.value }))}
                         onBlur={() => commitCheck(s)}
                         onKeyDown={(e) => {
@@ -242,14 +270,21 @@ export default function PayStubsView({
                       {savingKey === s.driverKey ? (
                         <span className="text-[11px] font-semibold text-muted">Saving…</span>
                       ) : (
-                        (saved[s.driverKey] ?? "") !== "" &&
-                        saved[s.driverKey] === (typed[s.driverKey] ?? "").trim() && (
+                        (saved[s.driverKey] ?? s.checkNumber) !== "" &&
+                        saved[s.driverKey] === (typed[s.driverKey] ?? s.checkNumber).trim() && (
                           <span className="text-[11px] font-bold text-good">Saved</span>
                         )
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setOpenKey(openKey === s.driverKey ? null : s.driverKey)}
+                      className="text-xs font-bold text-ink-2 hover:text-ink mr-3"
+                    >
+                      Adjust{adjLines.length > 0 ? ` (${adjLines.length})` : ""}
+                    </button>
                     <button
                       type="button"
                       onClick={() => download(s.driverName, [s])}
@@ -260,7 +295,22 @@ export default function PayStubsView({
                     </button>
                   </td>
                 </tr>
-              ))}
+                {openKey === s.driverKey && (
+                  <tr className="border-t border-grid bg-surface-2/50">
+                    <td colSpan={8} className="px-4 py-3">
+                      <AdjustmentsPanel
+                        driverName={s.driverName}
+                        weekStart={weekStart}
+                        lines={adjLines}
+                        onRemove={removeAdjustment}
+                        onAdded={() => router.refresh()}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })}
               {!stubs.length && (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-ink-2">
@@ -283,6 +333,172 @@ export default function PayStubsView({
           </table>
         </div>
       </div>
+
+      {unlistedDrivers.length > 0 && (
+        <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">
+            Add hours for a driver with no sheets this week
+          </p>
+          <select
+            value={extraDriver}
+            onChange={(e) => setExtraDriver(e.target.value)}
+            className="input-sm sm:max-w-xs"
+            aria-label="Driver"
+          >
+            <option value="">Choose a driver…</option>
+            {unlistedDrivers.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          {extraDriver && (
+            <AdjustmentForm
+              key={extraDriver}
+              driverName={extraDriver}
+              weekStart={weekStart}
+              onAdded={() => {
+                setExtraDriver("");
+                router.refresh();
+              }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdjustmentsPanel({
+  driverName,
+  weekStart,
+  lines,
+  onRemove,
+  onAdded,
+}: {
+  driverName: string;
+  weekStart: string;
+  lines: PayStub["lines"];
+  onRemove: (id: string) => void;
+  onAdded: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">
+        Hour adjustments — not from production sheets
+      </p>
+      {lines.length > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {lines.map((l) => (
+            <li key={l.adjustmentId} className="flex items-center gap-3 text-sm">
+              <span className="font-bold tabular-nums w-20">
+                {l.hours > 0 ? "+" : ""}
+                {l.hours} hrs
+              </span>
+              <span className="text-ink-2 tabular-nums">
+                {l.rate !== null ? `@ ${currency(l.rate)}` : "no rate"}
+                {l.amount !== null ? ` = ${currency(l.amount)}` : ""}
+              </span>
+              <span className="flex-1 text-ink-2 truncate">{l.note ?? ""}</span>
+              <button
+                type="button"
+                onClick={() => l.adjustmentId && onRemove(l.adjustmentId)}
+                className="text-xs font-bold text-critical/70 hover:text-critical"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <AdjustmentForm driverName={driverName} weekStart={weekStart} onAdded={onAdded} />
+    </div>
+  );
+}
+
+function AdjustmentForm({
+  driverName,
+  weekStart,
+  onAdded,
+}: {
+  driverName: string;
+  weekStart: string;
+  onAdded: () => void;
+}) {
+  const [hours, setHours] = useState("");
+  const [rate, setRate] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setErr(null);
+    const h = Number(hours.replace("+", "").trim());
+    const r = rate.replace(/[$,\s]/g, "");
+    setSaving(true);
+    const result = await addPayStubAdjustment({
+      driverName,
+      weekStart,
+      hours: h,
+      rate: r === "" ? null : Number(r),
+      note,
+    });
+    setSaving(false);
+    if ("error" in result) {
+      setErr(result.error);
+      return;
+    }
+    setHours("");
+    setRate("");
+    setNote("");
+    onAdded();
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Hours (+ or −)</span>
+          <input
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            inputMode="decimal"
+            placeholder="+2 or -1.5"
+            className="input-sm w-28"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Rate (optional)</span>
+          <input
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            inputMode="decimal"
+            placeholder="uses their rate"
+            className="input-sm w-32"
+          />
+        </label>
+        <label className="flex flex-col gap-1 flex-1 min-w-[160px]">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Note</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            placeholder="e.g. yard work"
+            className="input-sm"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={saving || !hours.trim()}
+          className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-4 py-2 disabled:opacity-60"
+        >
+          {saving ? "Adding…" : "Add"}
+        </button>
+      </div>
+      {err && <p className="text-sm font-semibold text-critical">{err}</p>}
     </div>
   );
 }

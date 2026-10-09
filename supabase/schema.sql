@@ -606,6 +606,35 @@ drop policy if exists pay_stub_prior_delete on public.pay_stub_prior_payments;
 create policy pay_stub_prior_delete on public.pay_stub_prior_payments for delete using (public.is_admin());
 
 -- ============================================================
+-- 14d. PAY STUB ADJUSTMENTS — hours added (+) or subtracted (-) on a
+--      contractor's work week that don't come from a production sheet.
+--      rate is optional: when blank, the driver's rate that week (or their
+--      roster default) is used.
+-- ============================================================
+create table if not exists public.pay_stub_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  driver_key text not null,
+  driver_name text not null,
+  week_start date not null,
+  hours numeric(6, 2) not null check (hours <> 0),
+  rate numeric(8, 2) check (rate is null or rate >= 0),
+  note text,
+  created_at timestamptz not null default now()
+);
+create index if not exists pay_stub_adjustments_week_idx on public.pay_stub_adjustments (week_start);
+
+alter table public.pay_stub_adjustments enable row level security;
+
+drop policy if exists pay_stub_adj_select on public.pay_stub_adjustments;
+create policy pay_stub_adj_select on public.pay_stub_adjustments for select using (public.is_admin());
+drop policy if exists pay_stub_adj_insert on public.pay_stub_adjustments;
+create policy pay_stub_adj_insert on public.pay_stub_adjustments for insert with check (public.is_admin());
+drop policy if exists pay_stub_adj_update on public.pay_stub_adjustments;
+create policy pay_stub_adj_update on public.pay_stub_adjustments for update using (public.is_admin());
+drop policy if exists pay_stub_adj_delete on public.pay_stub_adjustments;
+create policy pay_stub_adj_delete on public.pay_stub_adjustments for delete using (public.is_admin());
+
+-- ============================================================
 -- 15. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication
