@@ -104,12 +104,16 @@ export default function GenerateInvoiceForm({
     });
   }
 
+  // The chosen client's default rate bills every ticket on the invoice; a
+  // ticket's own rate is only used when that client has no default set.
+  const rateFor = (t: InvoiceTicket): number | null => client?.default_rate ?? t.rate;
+
   const hasTow = sortedTickets.some((t) => towAmount(t) !== null);
   const selectedTickets = sortedTickets.filter((t) => selected.has(t.id));
-  const total = selectedTickets.reduce(
-    (sum, t) => sum + (t.rate !== null ? (t.total_hours ?? 0) * t.rate : 0) + (towAmount(t) ?? 0),
-    0
-  );
+  const total = selectedTickets.reduce((sum, t) => {
+    const rate = rateFor(t);
+    return sum + (rate !== null ? (t.total_hours ?? 0) * rate : 0) + (towAmount(t) ?? 0);
+  }, 0);
 
   async function handleSaveDraft() {
     setError(null);
@@ -219,7 +223,7 @@ export default function GenerateInvoiceForm({
             truckNumber: t.truck_number,
             hours: t.total_hours ?? 0,
             travelTimeHours: t.travel_time_hours,
-            rate: t.rate,
+            rate: rateFor(t),
             towAmount: towAmount(t),
             scanPath: t.scan_path,
           })),
@@ -342,7 +346,9 @@ export default function GenerateInvoiceForm({
               </thead>
               <tbody>
                 {sortedTickets.map((t) => {
-                  const amount = t.rate !== null ? (t.total_hours ?? 0) * t.rate : null;
+                  const rate = rateFor(t);
+                  const amount = rate !== null ? (t.total_hours ?? 0) * rate : null;
+                  const overridden = client?.default_rate != null && t.rate !== null && t.rate !== client.default_rate;
                   const tow = towAmount(t);
                   const isMatch = client && t.client === client.name;
                   return (
@@ -360,7 +366,12 @@ export default function GenerateInvoiceForm({
                       <td className="py-2 pr-2 text-ink-2 tabular-nums">{t.truck_number ?? "—"}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">{t.total_hours ?? "—"}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">
-                        {t.rate !== null ? currency(t.rate) : <span className="text-warning">not set</span>}
+                        {rate !== null ? currency(rate) : <span className="text-warning">not set</span>}
+                        {overridden && (
+                          <span className="block text-[10.5px] font-semibold text-muted">
+                            ticket had {currency(t.rate as number)}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-2 text-right font-bold tabular-nums">
                         {amount !== null ? currency(amount) : "—"}

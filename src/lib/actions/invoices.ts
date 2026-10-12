@@ -31,6 +31,18 @@ async function recomputeInvoiceTotal(supabase: Supabase, invoiceId: string) {
     .eq("id", invoiceId);
 }
 
+// A client's default rate is what its invoices bill at. The rate is written
+// onto the tickets as they're attached to an invoice, so the ticket row stays
+// the single record of what that work was billed at — the invoice total, the
+// history view, and re-downloaded PDFs all read it from there.
+async function stampClientRate(supabase: Supabase, clientId: string, ticketIds: string[]) {
+  if (!ticketIds.length) return;
+  const { data: client } = await supabase.from("clients").select("default_rate").eq("id", clientId).maybeSingle();
+  const rate = client?.default_rate as number | null | undefined;
+  if (rate === null || rate === undefined) return;
+  await supabase.from("invoice_tickets").update({ rate }).in("id", ticketIds);
+}
+
 function str(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
@@ -88,7 +100,7 @@ async function autoAttachToOpenDraft(
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id")
+    .select("id, default_rate")
     .ilike("name", trimmedName)
     .maybeSingle();
   if (!client) return null;
@@ -104,7 +116,9 @@ async function autoAttachToOpenDraft(
     .maybeSingle();
   if (!draft) return null;
 
-  const { error } = await supabase.from("invoice_tickets").update({ invoice_id: draft.id }).eq("id", ticketId);
+  const attach: { invoice_id: string; rate?: number } = { invoice_id: draft.id };
+  if (client.default_rate !== null) attach.rate = client.default_rate as number;
+  const { error } = await supabase.from("invoice_tickets").update(attach).eq("id", ticketId);
   if (error) return null;
   await recomputeInvoiceTotal(supabase, draft.id);
   return draft.invoice_no as string;
@@ -420,6 +434,8 @@ export async function addTicketsToInvoice(invoiceId: string, ticketIds: string[]
     .in("id", ticketIds);
   if (error) throw new Error(error.message);
 
+  const { data: invoice } = await supabase.from("invoices").select("client_id").eq("id", invoiceId).maybeSingle();
+  if (invoice?.client_id) await stampClientRate(supabase, invoice.client_id as string, ticketIds);
   await recomputeInvoiceTotal(supabase, invoiceId);
 
   revalidatePath("/admin/invoices");
@@ -514,6 +530,9 @@ export async function saveInvoice(input: SaveInvoiceInput): Promise<{ id: string
       .update({ invoice_id: invoiceId })
       .in("id", input.ticketIds);
     if (linkError) return { error: linkError.message };
+
+    await stampClientRate(supabase, input.clientId, input.ticketIds);
+    await recomputeInvoiceTotal(supabase, invoiceId as string);
   }
 
   revalidatePath("/admin/invoices");

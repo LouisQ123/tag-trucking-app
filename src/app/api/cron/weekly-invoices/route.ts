@@ -24,8 +24,11 @@ function towAmount(t: TicketRow): number {
   return t.tow_rate !== null && t.tow_count !== null ? t.tow_rate * t.tow_count : 0;
 }
 
-function ticketTotal(t: TicketRow): number {
-  return (t.rate !== null ? (t.total_hours ?? 0) * t.rate : 0) + towAmount(t);
+// The client's default rate bills the whole invoice; a ticket's own rate only
+// applies when that client has no default set.
+function ticketTotal(t: TicketRow, clientRate: number | null): number {
+  const rate = clientRate ?? t.rate;
+  return (rate !== null ? (t.total_hours ?? 0) * rate : 0) + towAmount(t);
 }
 
 function nextInvoiceNumber(existingNumeric: number[]): string {
@@ -53,7 +56,7 @@ export async function GET(request: Request) {
         .is("invoice_id", null)
         .gte("date", startISO)
         .lte("date", endISO),
-      supabase.from("clients").select("id, name"),
+      supabase.from("clients").select("id, name, default_rate"),
       supabase.from("invoices").select("invoice_no"),
     ]);
 
@@ -69,8 +72,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ weekStart: startISO, weekEnd: endISO, created: [], skipped: [] });
   }
 
-  const clientIdByName = new Map(
-    ((clients ?? []) as { id: string; name: string }[]).map((c) => [c.name.trim().toLowerCase(), c.id])
+  const clientByName = new Map(
+    ((clients ?? []) as { id: string; name: string; default_rate: number | null }[]).map((c) => [
+      c.name.trim().toLowerCase(),
+      c,
+    ])
   );
 
   const byClient = new Map<string, TicketRow[]>();
@@ -91,13 +97,15 @@ export async function GET(request: Request) {
   const skipped: string[] = [];
 
   for (const [clientName, ticketsForClient] of byClient) {
-    const clientId = clientIdByName.get(clientName.toLowerCase());
+    const clientRow = clientByName.get(clientName.toLowerCase());
+    const clientId = clientRow?.id;
+    const clientRate = clientRow?.default_rate ?? null;
     if (!clientId) {
       skipped.push(`${clientName} (no matching client on file)`);
       continue;
     }
 
-    const total = Math.round(ticketsForClient.reduce((sum, t) => sum + ticketTotal(t), 0) * 100) / 100;
+    const total = Math.round(ticketsForClient.reduce((sum, t) => sum + ticketTotal(t, clientRate), 0) * 100) / 100;
     const invoiceNo = nextInvoiceNumber(existingNumeric);
     existingNumeric.push(Number(invoiceNo));
 
@@ -122,7 +130,7 @@ export async function GET(request: Request) {
 
     const { error: linkError } = await supabase
       .from("invoice_tickets")
-      .update({ invoice_id: invoice.id })
+      .update(clientRate !== null ? { invoice_id: invoice.id, rate: clientRate } : { invoice_id: invoice.id })
       .in(
         "id",
         ticketsForClient.map((t) => t.id)
