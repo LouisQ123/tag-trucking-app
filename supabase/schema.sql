@@ -606,21 +606,33 @@ drop policy if exists pay_stub_prior_delete on public.pay_stub_prior_payments;
 create policy pay_stub_prior_delete on public.pay_stub_prior_payments for delete using (public.is_admin());
 
 -- ============================================================
--- 14d. PAY STUB ADJUSTMENTS — hours added (+) or subtracted (-) on a
---      contractor's work week that don't come from a production sheet.
---      rate is optional: when blank, the driver's rate that week (or their
---      roster default) is used.
+-- 14d. PAY STUB ADJUSTMENTS — something added (+) or subtracted (-) on a
+--      contractor's work week that doesn't come from a production sheet:
+--      either hours (priced at a rate) or a flat dollar amount. Exactly one
+--      of hours / amount is set. rate is optional for hours: when blank, the
+--      driver's rate that week (or their roster default) is used.
 -- ============================================================
 create table if not exists public.pay_stub_adjustments (
   id uuid primary key default gen_random_uuid(),
   driver_key text not null,
   driver_name text not null,
   week_start date not null,
-  hours numeric(6, 2) not null check (hours <> 0),
+  hours numeric(6, 2),
+  amount numeric(10, 2),
   rate numeric(8, 2) check (rate is null or rate >= 0),
   note text,
   created_at timestamptz not null default now()
 );
+
+-- Upgrade for a table created before dollar adjustments existed (safe to
+-- re-run): hours becomes optional and amount is added.
+alter table public.pay_stub_adjustments alter column hours drop not null;
+alter table public.pay_stub_adjustments drop constraint if exists pay_stub_adjustments_hours_check;
+alter table public.pay_stub_adjustments add column if not exists amount numeric(10, 2);
+alter table public.pay_stub_adjustments drop constraint if exists pay_stub_adjustments_kind_check;
+alter table public.pay_stub_adjustments add constraint pay_stub_adjustments_kind_check
+  check ((hours is not null and hours <> 0 and amount is null) or (amount is not null and amount <> 0 and hours is null));
+
 create index if not exists pay_stub_adjustments_week_idx on public.pay_stub_adjustments (week_start);
 
 alter table public.pay_stub_adjustments enable row level security;

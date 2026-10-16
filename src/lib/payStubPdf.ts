@@ -136,7 +136,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
       head: [["Date", "Truck #", "Hours", "Rate", "Amount"]],
       body: stub.lines.map((l) => {
         const tail = [
-          l.hours.toLocaleString("en-US"),
+          l.dollarOnly ? "—" : l.hours.toLocaleString("en-US"),
           l.rate !== null ? currency(l.rate) : "—",
           l.amount !== null ? currency(l.amount) : "—",
         ];

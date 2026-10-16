@@ -15,14 +15,17 @@ export interface RosterContact {
   hourly_pay: number | null;
 }
 
-// Hours added to (+) or taken off (−) a driver's week that didn't come from a
-// production sheet — e.g. yard work, or a correction.
+// Something added to (+) or taken off (−) a driver's week that didn't come
+// from a production sheet: either hours (priced at a rate) or a flat dollar
+// amount — e.g. yard work, or $100 off for a ticket. Exactly one of `hours` /
+// `amount` is set.
 export interface PayAdjustment {
   id: string;
   driver_key: string;
   driver_name: string;
   week_start: string;
-  hours: number;
+  hours: number | null;
+  amount: number | null;
   rate: number | null;
   note: string | null;
 }
@@ -30,6 +33,8 @@ export interface PayAdjustment {
 export interface PayStubLine {
   // Set for a manual adjustment line (and null for a production-sheet shift).
   adjustmentId: string | null;
+  // A flat-dollar adjustment: no hours or rate, just the amount.
+  dollarOnly: boolean;
   note: string | null;
   date: string;
   truck: string | null;
@@ -163,6 +168,7 @@ export function buildPayStubs(
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((s) => ({
         adjustmentId: null,
+        dollarOnly: false,
         note: null,
         date: s.date,
         truck: s.truck_number,
@@ -171,9 +177,22 @@ export function buildPayStubs(
         amount: sheetAmount(s),
       }));
     const adjLines: PayStubLine[] = weekAdjs.map((a) => {
+      if (a.hours === null || a.hours === 0) {
+        return {
+          adjustmentId: a.id,
+          dollarOnly: true,
+          note: a.note,
+          date: weekEnd,
+          truck: null,
+          hours: 0,
+          rate: null,
+          amount: a.amount ?? 0,
+        };
+      }
       const rate = adjustmentRate(a, weekSheets, contact);
       return {
         adjustmentId: a.id,
+        dollarOnly: false,
         note: a.note,
         date: weekEnd,
         truck: null,
@@ -188,9 +207,10 @@ export function buildPayStubs(
     const ytdSheets = driverSheets.filter((s) => s.date.slice(0, 4) === year);
     const ytdAdjs = driverAdjs.filter((a) => addDaysISO(a.week_start, 6).slice(0, 4) === year);
     const ytdAdjAmounts = ytdAdjs.map((a) => {
+      if (a.hours === null || a.hours === 0) return a.amount ?? 0;
       const wk = driverSheets.filter((s) => s.date >= a.week_start && s.date <= addDaysISO(a.week_start, 6));
       const rate = adjustmentRate(a, wk, contact);
-      return rate !== null ? round2(a.hours * rate) : 0;
+      return rate !== null ? round2((a.hours ?? 0) * rate) : 0;
     });
 
     const ytdSheetsGross = round2(
@@ -210,7 +230,7 @@ export function buildPayStubs(
       grossPay: round2(lines.reduce((acc, l) => acc + (l.amount ?? 0), 0)),
       missingRateCount: lines.filter((l) => l.hours !== 0 && l.amount === null).length,
       ytdHours: round2(
-        ytdSheets.reduce((acc, s) => acc + (s.hours ?? 0), 0) + ytdAdjs.reduce((acc, a) => acc + a.hours, 0)
+        ytdSheets.reduce((acc, s) => acc + (s.hours ?? 0), 0) + ytdAdjs.reduce((acc, a) => acc + (a.hours ?? 0), 0)
       ),
       ytdSheetsGross,
       priorPayments,

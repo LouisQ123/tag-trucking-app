@@ -66,29 +66,42 @@ export async function savePayStubPriorPayments(
 export interface AddAdjustmentInput {
   driverName: string;
   weekStart: string;
-  hours: number;
+  // Give hours (priced at a rate) or a flat dollar amount — not both.
+  hours: number | null;
+  amount: number | null;
   rate: number | null;
   note: string;
 }
 
-// Hours added (+) or subtracted (−) on a driver's week, outside the sheets.
+// Hours or dollars added (+) or subtracted (−) on a driver's week, outside the sheets.
 export async function addPayStubAdjustment(input: AddAdjustmentInput): Promise<{ error: string } | { ok: true }> {
   await requireAdmin();
 
   const name = input.driverName.trim();
   const weekStart = workWeekStartOf(input.weekStart);
   if (!name || !weekStart) return { error: "Invalid pay stub." };
-  if (!Number.isFinite(input.hours) || input.hours === 0) return { error: "Enter the hours to add or subtract (e.g. 2 or -1.5)." };
-  if (Math.abs(input.hours) > 200) return { error: "That's too many hours for one adjustment." };
-  if (input.rate !== null && (!Number.isFinite(input.rate) || input.rate < 0)) return { error: "Enter a valid rate." };
+  const hasHours = input.hours !== null && input.hours !== 0;
+  const hasAmount = input.amount !== null && input.amount !== 0;
+  if (hasHours === hasAmount) {
+    return { error: "Enter either hours (e.g. 2 or -1.5) or a dollar amount (e.g. -100), not both." };
+  }
+  if (hasHours) {
+    if (!Number.isFinite(input.hours as number)) return { error: "Enter the hours to add or subtract (e.g. 2 or -1.5)." };
+    if (Math.abs(input.hours as number) > 200) return { error: "That's too many hours for one adjustment." };
+    if (input.rate !== null && (!Number.isFinite(input.rate) || input.rate < 0)) return { error: "Enter a valid rate." };
+  } else {
+    if (!Number.isFinite(input.amount as number)) return { error: "Enter a dollar amount, like -100 or 50." };
+    if (Math.abs(input.amount as number) > 100000) return { error: "That amount is too large." };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from("pay_stub_adjustments").insert({
     driver_key: driverKey(name),
     driver_name: name,
     week_start: weekStart,
-    hours: Math.round(input.hours * 100) / 100,
-    rate: input.rate,
+    hours: hasHours ? Math.round((input.hours as number) * 100) / 100 : null,
+    amount: hasAmount ? Math.round((input.amount as number) * 100) / 100 : null,
+    rate: hasHours ? input.rate : null,
     note: input.note.trim() || null,
   });
   return error ? { error: error.message } : { ok: true };

@@ -26,13 +26,14 @@ export default async function PayStubsPage({ searchParams }: { searchParams: Pro
     supabase.from("pay_stub_prior_payments").select("driver_key, amount").eq("year", year),
     supabase
       .from("pay_stub_adjustments")
-      .select("id, driver_key, driver_name, week_start, hours, rate, note")
+      .select("id, driver_key, driver_name, week_start, hours, amount, rate, note")
       .gte("week_start", addDaysISO(from, -6))
       .lte("week_start", weekStart),
   ]);
   const adjustments: PayAdjustment[] = ((adjRows ?? []) as PayAdjustment[]).map((a) => ({
     ...a,
-    hours: Number(a.hours),
+    hours: a.hours === null ? null : Number(a.hours),
+    amount: a.amount === null ? null : Number(a.amount),
     rate: a.rate === null ? null : Number(a.rate),
   }));
   const priors = Object.fromEntries(

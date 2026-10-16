@@ -225,7 +225,7 @@ export default function PayStubsView({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{s.lines.length}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{s.lines.filter((l) => !l.adjustmentId).length}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{s.totalHours}</td>
                   <td className="px-4 py-3 text-right font-bold tabular-nums">{currency(s.grossPay)}</td>
                   <td className="px-4 py-3">
@@ -337,7 +337,7 @@ export default function PayStubsView({
       {unlistedDrivers.length > 0 && (
         <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">
-            Add hours for a driver with no sheets this week
+            Add hours or money for a driver with no sheets this week
           </p>
           <select
             value={extraDriver}
@@ -385,20 +385,29 @@ function AdjustmentsPanel({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] font-extrabold uppercase tracking-widest text-muted">
-        Hour adjustments — not from production sheets
+        Adjustments — hours or dollars not from production sheets
       </p>
       {lines.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {lines.map((l) => (
             <li key={l.adjustmentId} className="flex items-center gap-3 text-sm">
-              <span className="font-bold tabular-nums w-20">
-                {l.hours > 0 ? "+" : ""}
-                {l.hours} hrs
-              </span>
-              <span className="text-ink-2 tabular-nums">
-                {l.rate !== null ? `@ ${currency(l.rate)}` : "no rate"}
-                {l.amount !== null ? ` = ${currency(l.amount)}` : ""}
-              </span>
+              {l.dollarOnly ? (
+                <span className={`font-bold tabular-nums ${(l.amount ?? 0) < 0 ? "text-critical" : "text-good"}`}>
+                  {(l.amount ?? 0) > 0 ? "+" : ""}
+                  {currency(l.amount ?? 0)}
+                </span>
+              ) : (
+                <>
+                  <span className="font-bold tabular-nums w-20">
+                    {l.hours > 0 ? "+" : ""}
+                    {l.hours} hrs
+                  </span>
+                  <span className="text-ink-2 tabular-nums">
+                    {l.rate !== null ? `@ ${currency(l.rate)}` : "no rate"}
+                    {l.amount !== null ? ` = ${currency(l.amount)}` : ""}
+                  </span>
+                </>
+              )}
               <span className="flex-1 text-ink-2 truncate">{l.note ?? ""}</span>
               <button
                 type="button"
@@ -425,7 +434,8 @@ function AdjustmentForm({
   weekStart: string;
   onAdded: () => void;
 }) {
-  const [hours, setHours] = useState("");
+  const [mode, setMode] = useState<"hours" | "dollars">("hours");
+  const [value, setValue] = useState("");
   const [rate, setRate] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -433,14 +443,15 @@ function AdjustmentForm({
 
   async function submit() {
     setErr(null);
-    const h = Number(hours.replace("+", "").trim());
+    const n = Number(value.replace(/[$,\s+]/g, ""));
     const r = rate.replace(/[$,\s]/g, "");
     setSaving(true);
     const result = await addPayStubAdjustment({
       driverName,
       weekStart,
-      hours: h,
-      rate: r === "" ? null : Number(r),
+      hours: mode === "hours" ? n : null,
+      amount: mode === "dollars" ? n : null,
+      rate: mode === "hours" && r !== "" ? Number(r) : null,
       note,
     });
     setSaving(false);
@@ -448,7 +459,7 @@ function AdjustmentForm({
       setErr(result.error);
       return;
     }
-    setHours("");
+    setValue("");
     setRate("");
     setNote("");
     onAdded();
@@ -457,26 +468,42 @@ function AdjustmentForm({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end gap-2">
+        <div className="flex rounded-lg border border-border overflow-hidden text-xs font-bold">
+          {(["hours", "dollars"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`px-3 py-2 ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
+            >
+              {m === "hours" ? "Hours" : "$ Amount"}
+            </button>
+          ))}
+        </div>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Hours (+ or −)</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">
+            {mode === "hours" ? "Hours (+ or −)" : "Amount (+ or −)"}
+          </span>
           <input
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             inputMode="decimal"
-            placeholder="+2 or -1.5"
+            placeholder={mode === "hours" ? "+2 or -1.5" : "-100 or +50"}
             className="input-sm w-28"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Rate (optional)</span>
-          <input
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            inputMode="decimal"
-            placeholder="uses their rate"
-            className="input-sm w-32"
-          />
-        </label>
+        {mode === "hours" && (
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Rate (optional)</span>
+            <input
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              inputMode="decimal"
+              placeholder="uses their rate"
+              className="input-sm w-32"
+            />
+          </label>
+        )}
         <label className="flex flex-col gap-1 flex-1 min-w-[160px]">
           <span className="text-[10px] font-bold uppercase tracking-wide text-ink-2">Note</span>
           <input
@@ -485,14 +512,14 @@ function AdjustmentForm({
             onKeyDown={(e) => {
               if (e.key === "Enter") submit();
             }}
-            placeholder="e.g. yard work"
+            placeholder={mode === "hours" ? "e.g. yard work" : "e.g. ticket"}
             className="input-sm"
           />
         </label>
         <button
           type="button"
           onClick={submit}
-          disabled={saving || !hours.trim()}
+          disabled={saving || !value.trim()}
           className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-4 py-2 disabled:opacity-60"
         >
           {saving ? "Adding…" : "Add"}
