@@ -499,6 +499,10 @@ create index if not exists invoice_tickets_invoice_idx on public.invoice_tickets
 alter table public.invoice_tickets add column if not exists tow_rate numeric(8, 2) check (tow_rate is null or tow_rate >= 0);
 alter table public.invoice_tickets add column if not exists tow_count integer check (tow_count is null or tow_count >= 0);
 
+-- invoice_tickets: keep_rate — invoices bill at the client's default rate
+-- unless a ticket is flagged to keep its own rate.
+alter table public.invoice_tickets add column if not exists keep_rate boolean not null default false;
+
 -- invoice_tickets: optional storage path to a photo/PDF scan of the
 -- original paper ticket this row was keyed in from.
 alter table public.invoice_tickets add column if not exists scan_path text;

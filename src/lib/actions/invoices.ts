@@ -40,7 +40,8 @@ async function stampClientRate(supabase: Supabase, clientId: string, ticketIds: 
   const { data: client } = await supabase.from("clients").select("default_rate").eq("id", clientId).maybeSingle();
   const rate = client?.default_rate as number | null | undefined;
   if (rate === null || rate === undefined) return;
-  await supabase.from("invoice_tickets").update({ rate }).in("id", ticketIds);
+  // Tickets flagged keep_rate bill at their own rate, never the default.
+  await supabase.from("invoice_tickets").update({ rate }).in("id", ticketIds).eq("keep_rate", false);
 }
 
 function str(formData: FormData, key: string) {
@@ -74,6 +75,7 @@ function ticketFields(formData: FormData) {
     total_hours: numOrNull(formData, "total_hours"),
     loads: intOrNull(formData, "loads"),
     rate: numOrNull(formData, "rate"),
+    keep_rate: formData.get("keep_rate") === "on",
     tow_rate: numOrNull(formData, "tow_rate"),
     tow_count: intOrNull(formData, "tow_count"),
   };
@@ -116,8 +118,9 @@ async function autoAttachToOpenDraft(
     .maybeSingle();
   if (!draft) return null;
 
+  const { data: ticket } = await supabase.from("invoice_tickets").select("keep_rate").eq("id", ticketId).maybeSingle();
   const attach: { invoice_id: string; rate?: number } = { invoice_id: draft.id };
-  if (client.default_rate !== null) attach.rate = client.default_rate as number;
+  if (client.default_rate !== null && !ticket?.keep_rate) attach.rate = client.default_rate as number;
   const { error } = await supabase.from("invoice_tickets").update(attach).eq("id", ticketId);
   if (error) return null;
   await recomputeInvoiceTotal(supabase, draft.id);
@@ -475,6 +478,8 @@ export interface SaveInvoiceInput {
   forDescription: string;
   terms: string;
   ticketIds: string[];
+  // Tickets on this invoice that bill at their own rate, not the client's default.
+  keepRateTicketIds?: string[];
   total: number;
   status: "draft" | "pending";
 }
@@ -530,6 +535,11 @@ export async function saveInvoice(input: SaveInvoiceInput): Promise<{ id: string
       .update({ invoice_id: invoiceId })
       .in("id", input.ticketIds);
     if (linkError) return { error: linkError.message };
+
+    const keepIds = (input.keepRateTicketIds ?? []).filter((id) => input.ticketIds.includes(id));
+    const otherIds = input.ticketIds.filter((id) => !keepIds.includes(id));
+    if (keepIds.length) await supabase.from("invoice_tickets").update({ keep_rate: true }).in("id", keepIds);
+    if (otherIds.length) await supabase.from("invoice_tickets").update({ keep_rate: false }).in("id", otherIds);
 
     await stampClientRate(supabase, input.clientId, input.ticketIds);
     await recomputeInvoiceTotal(supabase, invoiceId as string);

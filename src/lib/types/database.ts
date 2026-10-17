@@ -52,6 +52,9 @@ export interface InvoiceTicket {
   total_hours: number | null;
   loads: number | null;
   rate: number | null;
+  // When true, invoices bill this ticket at its own rate instead of the
+  // client's default rate.
+  keep_rate: boolean;
   tow_rate: number | null;
   tow_count: number | null;
   invoice_id: string | null;

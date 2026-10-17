@@ -16,6 +16,7 @@ interface TicketRow {
   client: string;
   total_hours: number | null;
   rate: number | null;
+  keep_rate: boolean;
   tow_rate: number | null;
   tow_count: number | null;
 }
@@ -25,9 +26,10 @@ function towAmount(t: TicketRow): number {
 }
 
 // The client's default rate bills the whole invoice; a ticket's own rate only
-// applies when that client has no default set.
+// applies when that client has no default set, or the ticket is flagged to
+// keep its own rate.
 function ticketTotal(t: TicketRow, clientRate: number | null): number {
-  const rate = clientRate ?? t.rate;
+  const rate = t.keep_rate && t.rate !== null ? t.rate : (clientRate ?? t.rate);
   return (rate !== null ? (t.total_hours ?? 0) * rate : 0) + towAmount(t);
 }
 
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
     await Promise.all([
       supabase
         .from("invoice_tickets")
-        .select("id, client, total_hours, rate, tow_rate, tow_count, date")
+        .select("id, client, total_hours, rate, keep_rate, tow_rate, tow_count, date")
         .is("invoice_id", null)
         .gte("date", startISO)
         .lte("date", endISO),
@@ -130,11 +132,15 @@ export async function GET(request: Request) {
 
     const { error: linkError } = await supabase
       .from("invoice_tickets")
-      .update(clientRate !== null ? { invoice_id: invoice.id, rate: clientRate } : { invoice_id: invoice.id })
+      .update({ invoice_id: invoice.id })
       .in(
         "id",
         ticketsForClient.map((t) => t.id)
       );
+    if (!linkError && clientRate !== null) {
+      const stampIds = ticketsForClient.filter((t) => !t.keep_rate).map((t) => t.id);
+      if (stampIds.length) await supabase.from("invoice_tickets").update({ rate: clientRate }).in("id", stampIds);
+    }
 
     if (linkError) {
       skipped.push(`${clientName} (invoice #${invoiceNo} created but couldn't link tickets: ${linkError.message})`);

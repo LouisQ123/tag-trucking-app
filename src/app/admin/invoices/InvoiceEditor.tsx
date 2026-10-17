@@ -112,6 +112,7 @@ export default function InvoiceEditor({
     ticket?.rate !== null && ticket?.rate !== undefined ? String(ticket.rate) : ""
   );
   const [rateTouched, setRateTouched] = useState(false);
+  const [keepRate, setKeepRate] = useState(ticket?.keep_rate ?? false);
   const [towRate, setTowRate] = useState(
     ticket?.tow_rate !== null && ticket?.tow_rate !== undefined ? String(ticket.tow_rate) : ""
   );
@@ -406,6 +407,19 @@ export default function InvoiceEditor({
               className="input"
             />
           </Field>
+          <label className="sm:col-span-2 flex items-start gap-2 text-[13px] text-ink-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="keep_rate"
+              checked={keepRate}
+              onChange={(e) => setKeepRate(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-bold text-ink">Keep this rate on invoices.</span> Otherwise the client&apos;s
+              default rate is used when this ticket is invoiced.
+            </span>
+          </label>
         </div>
       </Card>
 

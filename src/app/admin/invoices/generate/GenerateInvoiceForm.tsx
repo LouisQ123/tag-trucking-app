@@ -88,6 +88,20 @@ export default function GenerateInvoiceForm({
       : new Set(tickets.filter((t) => client && t.client === client.name).map((t) => t.id))
   );
 
+  // Tickets that bill at their own rate rather than the client's default.
+  const [keepRate, setKeepRate] = useState<Set<string>>(
+    () => new Set(tickets.filter((t) => t.keep_rate).map((t) => t.id))
+  );
+
+  function toggleKeepRate(id: string) {
+    setKeepRate((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function onClientChange(id: string) {
     setClientId(id);
     const nextClient = clients.find((c) => c.id === id) ?? null;
@@ -104,9 +118,10 @@ export default function GenerateInvoiceForm({
     });
   }
 
-  // The chosen client's default rate bills every ticket on the invoice; a
-  // ticket's own rate is only used when that client has no default set.
-  const rateFor = (t: InvoiceTicket): number | null => client?.default_rate ?? t.rate;
+  // The chosen client's default rate bills every ticket on the invoice, unless
+  // the ticket is set to keep its own rate (or the client has no default).
+  const rateFor = (t: InvoiceTicket): number | null =>
+    keepRate.has(t.id) && t.rate !== null ? t.rate : (client?.default_rate ?? t.rate);
 
   const hasTow = sortedTickets.some((t) => towAmount(t) !== null);
   const selectedTickets = sortedTickets.filter((t) => selected.has(t.id));
@@ -137,6 +152,7 @@ export default function GenerateInvoiceForm({
         forDescription: forDescription.trim(),
         terms: terms.trim() || "Net 30 days",
         ticketIds: selectedTickets.map((t) => t.id),
+        keepRateTicketIds: selectedTickets.filter((t) => keepRate.has(t.id)).map((t) => t.id),
         total,
         status: "draft",
       });
@@ -192,6 +208,7 @@ export default function GenerateInvoiceForm({
         forDescription: forDescription.trim(),
         terms: terms.trim() || "Net 30 days",
         ticketIds: selectedTickets.map((t) => t.id),
+        keepRateTicketIds: selectedTickets.filter((t) => keepRate.has(t.id)).map((t) => t.id),
         total,
         status: "pending",
       });
@@ -348,7 +365,7 @@ export default function GenerateInvoiceForm({
                 {sortedTickets.map((t) => {
                   const rate = rateFor(t);
                   const amount = rate !== null ? (t.total_hours ?? 0) * rate : null;
-                  const overridden = client?.default_rate != null && t.rate !== null && t.rate !== client.default_rate;
+                  const differs = client?.default_rate != null && t.rate !== null && t.rate !== client.default_rate;
                   const tow = towAmount(t);
                   const isMatch = client && t.client === client.name;
                   return (
@@ -367,10 +384,15 @@ export default function GenerateInvoiceForm({
                       <td className="py-2 pr-2 text-right tabular-nums">{t.total_hours ?? "—"}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">
                         {rate !== null ? currency(rate) : <span className="text-warning">not set</span>}
-                        {overridden && (
-                          <span className="block text-[10.5px] font-semibold text-muted">
-                            ticket had {currency(t.rate as number)}
-                          </span>
+                        {differs && (
+                          <label className="flex items-center justify-end gap-1 text-[10.5px] font-semibold text-muted cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={keepRate.has(t.id)}
+                              onChange={() => toggleKeepRate(t.id)}
+                            />
+                            Keep ticket rate {currency(t.rate as number)}
+                          </label>
                         )}
                       </td>
                       <td className="py-2 pr-2 text-right font-bold tabular-nums">
