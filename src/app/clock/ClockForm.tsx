@@ -159,20 +159,20 @@ export default function ClockForm({ names }: { names: { id: string; name: string
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass} htmlFor="clock-ticket-out">
-              Ticket number(s) (optional)
+              Ticket number(s)
             </label>
             <input
               id="clock-ticket-out"
               value={ticket}
               onChange={(e) => setTicket(e.target.value)}
               className={inputClass}
-              placeholder="Add or update your ticket #"
+              placeholder="Your ticket #"
             />
           </div>
           <button
             type="button"
             onClick={doClockOut}
-            disabled={busy}
+            disabled={busy || !ticket.trim()}
             className="rounded-md bg-critical text-white font-bold text-sm py-3 disabled:opacity-60"
           >
             {busy ? "Clocking out…" : "Clock Out"}
@@ -206,26 +206,26 @@ export default function ClockForm({ names }: { names: { id: string; name: string
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               className={inputClass}
-              placeholder="e.g. P3 Contractors/Carney"
+              placeholder="P3 Contractors"
               maxLength={80}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass} htmlFor="clock-job">
-              Job (optional)
+              Job
             </label>
             <input
               id="clock-job"
               value={job}
               onChange={(e) => setJob(e.target.value)}
               className={inputClass}
-              placeholder="Where / what you're working on"
+              placeholder="Carney"
               maxLength={120}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass} htmlFor="clock-ticket">
-              Ticket number(s) (optional)
+              Ticket number(s)
             </label>
             <input
               id="clock-ticket"
@@ -238,7 +238,7 @@ export default function ClockForm({ names }: { names: { id: string; name: string
           <button
             type="button"
             onClick={doClockIn}
-            disabled={busy || !truck || !company.trim()}
+            disabled={busy || !truck || !company.trim() || !job.trim() || !ticket.trim()}
             className="rounded-md bg-good text-white font-bold text-sm py-3 disabled:opacity-60"
           >
             {busy ? "Clocking in…" : "Clock In"}
