@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { COMPANIES, TRUCK_NUMBERS } from "@/lib/loadOptions";
+import { TRUCK_NUMBERS } from "@/lib/loadOptions";
 import { easternDateOf } from "@/lib/workWeek";
 import { pinMatches } from "@/lib/pin";
 
@@ -78,36 +78,43 @@ export interface OpenPunch {
   clockIn: string;
   truck: string | null;
   company: string | null;
+  job: string | null;
+  ticketNumber: string | null;
 }
 
 export interface ClockState {
   name: string;
   open: OpenPunch | null;
-  // Trucks and companies are only handed out after the PIN checks out.
   trucks: string[];
-  companies: string[];
 }
 
 async function loadState(driver: DriverRow): Promise<ClockState> {
   const supabase = createAdminClient();
-  const [{ data: open }, { data: clients }] = await Promise.all([
-    supabase
-      .from("time_punches")
-      .select("clock_in, truck_number, company")
-      .eq("driver_id", driver.id)
-      .is("clock_out", null)
-      .maybeSingle(),
-    supabase.from("clients").select("name").order("name"),
-  ]);
-  const companies = Array.from(
-    new Set([...COMPANIES, ...((clients ?? []) as { name: string }[]).map((c) => c.name)].filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b));
-  const row = open as { clock_in: string; truck_number: string | null; company: string | null } | null;
+  const { data: open } = await supabase
+    .from("time_punches")
+    .select("clock_in, truck_number, company, job, ticket_number")
+    .eq("driver_id", driver.id)
+    .is("clock_out", null)
+    .maybeSingle();
+  const row = open as {
+    clock_in: string;
+    truck_number: string | null;
+    company: string | null;
+    job: string | null;
+    ticket_number: string | null;
+  } | null;
   return {
     name: driver.full_name,
-    open: row ? { clockIn: row.clock_in, truck: row.truck_number, company: row.company } : null,
+    open: row
+      ? {
+          clockIn: row.clock_in,
+          truck: row.truck_number,
+          company: row.company,
+          job: row.job,
+          ticketNumber: row.ticket_number,
+        }
+      : null,
     trucks: TRUCK_NUMBERS,
-    companies,
   };
 }
 
@@ -121,15 +128,21 @@ export async function clockIn(
   driverId: string,
   pin: string,
   truck: string,
-  company: string
+  company: string,
+  job: string,
+  ticketNumber: string
 ): Promise<{ error: string } | { state: ClockState }> {
   const auth = await authenticate(driverId, pin);
   if ("error" in auth) return auth;
 
   const truckValue = truck.trim();
   const companyValue = company.trim();
-  if (!truckValue || !companyValue) return { error: "Pick your truck and the company you're working for." };
-  if (truckValue.length > 40 || companyValue.length > 80) return { error: "That's too long." };
+  const jobValue = job.trim();
+  const ticketValue = ticketNumber.trim();
+  if (!truckValue || !companyValue) return { error: "Pick your truck and type the company you're working for." };
+  if (truckValue.length > 40 || companyValue.length > 80 || jobValue.length > 120 || ticketValue.length > 60) {
+    return { error: "That's too long." };
+  }
 
   const supabase = createAdminClient();
   const now = new Date();
@@ -140,6 +153,8 @@ export async function clockIn(
     clock_in: now.toISOString(),
     truck_number: truckValue,
     company: companyValue,
+    job: jobValue || null,
+    ticket_number: ticketValue || null,
   });
   if (error) {
     // The one-open-punch-per-person index fires if they're already in.
@@ -149,9 +164,12 @@ export async function clockIn(
   return { state: await loadState(auth.driver) };
 }
 
+// A ticket number typed here is saved with the punch; left blank, whatever
+// was entered at clock-in is kept.
 export async function clockOut(
   driverId: string,
-  pin: string
+  pin: string,
+  ticketNumber: string = ""
 ): Promise<{ error: string } | { state: ClockState; hours: number }> {
   const auth = await authenticate(driverId, pin);
   if ("error" in auth) return auth;
@@ -166,10 +184,13 @@ export async function clockOut(
   const punch = open as { id: string; clock_in: string } | null;
   if (!punch) return { error: "You're not clocked in." };
 
+  const ticketValue = ticketNumber.trim();
+  if (ticketValue.length > 60) return { error: "That ticket number is too long." };
+
   const now = new Date();
   const { error } = await supabase
     .from("time_punches")
-    .update({ clock_out: now.toISOString() })
+    .update(ticketValue ? { clock_out: now.toISOString(), ticket_number: ticketValue } : { clock_out: now.toISOString() })
     .eq("id", punch.id);
   if (error) return { error: "Couldn't clock you out. Try again." };
 

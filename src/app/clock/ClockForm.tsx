@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { clockIn, clockOut, clockVerify, type ClockState } from "@/lib/actions/clock";
 
-const OTHER = "__other__";
-
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     timeZone: "America/New_York",
@@ -27,7 +25,8 @@ export default function ClockForm({ names }: { names: { id: string; name: string
   const [state, setState] = useState<ClockState | null>(null);
   const [truck, setTruck] = useState("");
   const [company, setCompany] = useState("");
-  const [otherCompany, setOtherCompany] = useState("");
+  const [job, setJob] = useState("");
+  const [ticket, setTicket] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -38,7 +37,8 @@ export default function ClockForm({ names }: { names: { id: string; name: string
     setState(null);
     setTruck("");
     setCompany("");
-    setOtherCompany("");
+    setJob("");
+    setTicket("");
     setError(null);
     setMessage(msg);
   }
@@ -55,13 +55,13 @@ export default function ClockForm({ names }: { names: { id: string; name: string
       return;
     }
     setState(result.state);
+    setTicket(result.state.open?.ticketNumber ?? "");
   }
 
   async function doClockIn() {
-    const chosenCompany = company === OTHER ? otherCompany : company;
     setBusy(true);
     setError(null);
-    const result = await clockIn(driverId, pin, truck, chosenCompany);
+    const result = await clockIn(driverId, pin, truck, company, job, ticket);
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
@@ -73,7 +73,7 @@ export default function ClockForm({ names }: { names: { id: string; name: string
   async function doClockOut() {
     setBusy(true);
     setError(null);
-    const result = await clockOut(driverId, pin);
+    const result = await clockOut(driverId, pin, ticket);
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
@@ -154,8 +154,20 @@ export default function ClockForm({ names }: { names: { id: string; name: string
               {fmtDay(state.open.clockIn)}
             </p>
             <p className="text-sm text-ink-2">
-              {[state.open.truck, state.open.company].filter(Boolean).join(" · ")}
+              {[state.open.truck, state.open.company, state.open.job].filter(Boolean).join(" · ")}
             </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass} htmlFor="clock-ticket-out">
+              Ticket number(s) (optional)
+            </label>
+            <input
+              id="clock-ticket-out"
+              value={ticket}
+              onChange={(e) => setTicket(e.target.value)}
+              className={inputClass}
+              placeholder="Add or update your ticket #"
+            />
           </div>
           <button
             type="button"
@@ -187,35 +199,46 @@ export default function ClockForm({ names }: { names: { id: string; name: string
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass} htmlFor="clock-company">
-              Company you&apos;re working for today
+              Company you&apos;re working for
             </label>
-            <select
+            <input
               id="clock-company"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               className={inputClass}
-            >
-              <option value="">Choose the company…</option>
-              {state.companies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-              <option value={OTHER}>Other…</option>
-            </select>
-            {company === OTHER && (
-              <input
-                value={otherCompany}
-                onChange={(e) => setOtherCompany(e.target.value)}
-                placeholder="Company name"
-                className={inputClass}
-              />
-            )}
+              placeholder="e.g. P3 Contractors/Carney"
+              maxLength={80}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass} htmlFor="clock-job">
+              Job (optional)
+            </label>
+            <input
+              id="clock-job"
+              value={job}
+              onChange={(e) => setJob(e.target.value)}
+              className={inputClass}
+              placeholder="Where / what you're working on"
+              maxLength={120}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass} htmlFor="clock-ticket">
+              Ticket number(s) (optional)
+            </label>
+            <input
+              id="clock-ticket"
+              value={ticket}
+              onChange={(e) => setTicket(e.target.value)}
+              className={inputClass}
+              maxLength={60}
+            />
           </div>
           <button
             type="button"
             onClick={doClockIn}
-            disabled={busy || !truck || !(company === OTHER ? otherCompany.trim() : company)}
+            disabled={busy || !truck || !company.trim()}
             className="rounded-md bg-good text-white font-bold text-sm py-3 disabled:opacity-60"
           >
             {busy ? "Clocking in…" : "Clock In"}

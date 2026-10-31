@@ -669,6 +669,8 @@ create table if not exists public.time_punches (
   clock_out timestamptz,
   truck_number text,
   company text,
+  job text,
+  ticket_number text,
   note text,
   edited boolean not null default false,
   created_at timestamptz not null default now(),
@@ -676,6 +678,11 @@ create table if not exists public.time_punches (
 );
 create unique index if not exists time_punches_one_open_idx
   on public.time_punches (driver_id) where clock_out is null and driver_id is not null;
+-- Added after the first version of the table: what job they worked and the
+-- ticket number(s) for the day, both typed by the driver.
+alter table public.time_punches add column if not exists job text;
+alter table public.time_punches add column if not exists ticket_number text;
+
 create index if not exists time_punches_work_date_idx on public.time_punches (work_date);
 
 alter table public.time_punches enable row level security;

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { COMPANIES, TRUCK_NUMBERS } from "@/lib/loadOptions";
+import { TRUCK_NUMBERS } from "@/lib/loadOptions";
 import { addDaysISO, currentWorkWeekRange, workWeekStartOf } from "@/lib/workWeek";
 import TimeClockView, { type Punch } from "./TimeClockView";
 
@@ -9,20 +9,15 @@ export default async function TimeClockPage({ searchParams }: { searchParams: Pr
   const weekEnd = addDaysISO(weekStart, 6);
 
   const supabase = await createClient();
-  const [{ data: punches }, { data: roster }, { data: clients }] = await Promise.all([
+  const [{ data: punches }, { data: roster }] = await Promise.all([
     supabase
       .from("time_punches")
-      .select("id, driver_id, driver_name, work_date, clock_in, clock_out, truck_number, company, edited")
+      .select("id, driver_id, driver_name, work_date, clock_in, clock_out, truck_number, company, job, ticket_number, edited")
       .gte("work_date", weekStart)
       .lte("work_date", weekEnd)
       .order("clock_in", { ascending: true }),
     supabase.from("drivers").select("id, full_name").order("full_name"),
-    supabase.from("clients").select("name").order("name"),
   ]);
-
-  const companies = Array.from(
-    new Set([...COMPANIES, ...((clients ?? []) as { name: string }[]).map((c) => c.name)].filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b));
 
   return (
     <main className="max-w-5xl mx-auto px-5 py-7 flex flex-col gap-5">
@@ -38,7 +33,6 @@ export default async function TimeClockPage({ searchParams }: { searchParams: Pr
         punches={(punches ?? []) as Punch[]}
         roster={(roster ?? []) as { id: string; full_name: string }[]}
         trucks={TRUCK_NUMBERS}
-        companies={companies}
         weekStart={weekStart}
         weekEnd={weekEnd}
         prevWeek={addDaysISO(weekStart, -7)}

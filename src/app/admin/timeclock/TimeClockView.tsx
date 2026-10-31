@@ -16,6 +16,8 @@ export interface Punch {
   clock_out: string | null;
   truck_number: string | null;
   company: string | null;
+  job: string | null;
+  ticket_number: string | null;
   edited: boolean;
 }
 
@@ -51,7 +53,6 @@ export default function TimeClockView({
   punches,
   roster,
   trucks,
-  companies,
   weekStart,
   weekEnd,
   prevWeek,
@@ -61,7 +62,6 @@ export default function TimeClockView({
   punches: Punch[];
   roster: { id: string; full_name: string }[];
   trucks: string[];
-  companies: string[];
   weekStart: string;
   weekEnd: string;
   prevWeek: string;
@@ -145,8 +145,7 @@ export default function TimeClockView({
           <PunchForm
             roster={roster}
             trucks={trucks}
-            companies={companies}
-            initial={{ date: weekStart, timeIn: "", timeOut: "", truck: "", company: "" }}
+            initial={{ date: weekStart, timeIn: "", timeOut: "", truck: "", company: "", job: "", ticketNumber: "" }}
             submitLabel="Add punch"
             onSubmit={async (driverId, input) => {
               const result = await addPunch(driverId, input);
@@ -176,7 +175,7 @@ export default function TimeClockView({
               <p className="text-sm font-extrabold text-accent tabular-nums">{Math.round(sum * 100) / 100} hrs</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[900px]">
                 <thead>
                   <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-muted">
                     <th className="px-4 py-2">Day</th>
@@ -185,6 +184,8 @@ export default function TimeClockView({
                     <th className="px-4 py-2 text-right">Hours</th>
                     <th className="px-4 py-2">Truck</th>
                     <th className="px-4 py-2">Company</th>
+                    <th className="px-4 py-2">Job</th>
+                    <th className="px-4 py-2">Ticket #</th>
                     <th className="px-4 py-2" />
                   </tr>
                 </thead>
@@ -217,6 +218,8 @@ export default function TimeClockView({
                             {p.company ?? "—"}
                             {p.edited && <span className="ml-1.5 text-[9.5px] font-bold uppercase text-muted">edited</span>}
                           </td>
+                          <td className="px-4 py-2.5 text-ink-2">{p.job ?? "—"}</td>
+                          <td className="px-4 py-2.5 tabular-nums">{p.ticket_number ?? "—"}</td>
                           <td className="px-4 py-2.5 text-right whitespace-nowrap">
                             <button
                               type="button"
@@ -236,16 +239,17 @@ export default function TimeClockView({
                         </tr>
                         {editingId === p.id && (
                           <tr className="border-t border-grid bg-surface-2/50">
-                            <td colSpan={7} className="px-4 py-3">
+                            <td colSpan={9} className="px-4 py-3">
                               <PunchForm
                                 trucks={trucks}
-                                companies={companies}
                                 initial={{
                                   date: p.work_date,
                                   timeIn: hhmm(p.clock_in),
                                   timeOut: p.clock_out ? hhmm(p.clock_out) : "",
                                   truck: p.truck_number ?? "",
                                   company: p.company ?? "",
+                                  job: p.job ?? "",
+                                  ticketNumber: p.ticket_number ?? "",
                                 }}
                                 submitLabel="Save"
                                 onSubmit={async (_driverId, input) => {
@@ -277,7 +281,6 @@ export default function TimeClockView({
 function PunchForm({
   roster,
   trucks,
-  companies,
   initial,
   submitLabel,
   onSubmit,
@@ -285,7 +288,6 @@ function PunchForm({
 }: {
   roster?: { id: string; full_name: string }[];
   trucks: string[];
-  companies: string[];
   initial: PunchInput;
   submitLabel: string;
   onSubmit: (driverId: string, input: PunchInput) => Promise<{ error: string } | { ok: true }>;
@@ -297,6 +299,8 @@ function PunchForm({
   const [timeOut, setTimeOut] = useState(initial.timeOut);
   const [truck, setTruck] = useState(initial.truck);
   const [company, setCompany] = useState(initial.company);
+  const [job, setJob] = useState(initial.job);
+  const [ticketNumber, setTicketNumber] = useState(initial.ticketNumber);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -307,7 +311,7 @@ function PunchForm({
       return;
     }
     setSaving(true);
-    const result = await onSubmit(driverId, { date, timeIn, timeOut, truck, company });
+    const result = await onSubmit(driverId, { date, timeIn, timeOut, truck, company, job, ticketNumber });
     setSaving(false);
     if ("error" in result) setErr(result.error);
   }
@@ -317,7 +321,7 @@ function PunchForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
         {roster && (
           <label className={mini}>
             <span className={lab}>Driver</span>
@@ -361,14 +365,15 @@ function PunchForm({
         </label>
         <label className={mini}>
           <span className={lab}>Company</span>
-          <select value={company} onChange={(e) => setCompany(e.target.value)} className="input-sm">
-            <option value="">—</option>
-            {[...new Set([...companies, ...(company ? [company] : [])])].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <input value={company} onChange={(e) => setCompany(e.target.value)} className="input-sm" />
+        </label>
+        <label className={mini}>
+          <span className={lab}>Job</span>
+          <input value={job} onChange={(e) => setJob(e.target.value)} className="input-sm" />
+        </label>
+        <label className={mini}>
+          <span className={lab}>Ticket #</span>
+          <input value={ticketNumber} onChange={(e) => setTicketNumber(e.target.value)} className="input-sm" />
         </label>
       </div>
       {err && <p className="text-sm font-semibold text-critical">{err}</p>}

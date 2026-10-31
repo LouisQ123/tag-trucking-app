@@ -41,6 +41,8 @@ export interface PunchInput {
   timeOut: string; // "HH:MM" or "" for still clocked in
   truck: string;
   company: string;
+  job: string;
+  ticketNumber: string;
 }
 
 // Out earlier than in means the shift ran past midnight.
@@ -69,6 +71,8 @@ export async function updatePunch(id: string, input: PunchInput): Promise<Result
       clock_out: times.clockOut ? times.clockOut.toISOString() : null,
       truck_number: input.truck.trim() || null,
       company: input.company.trim() || null,
+      job: input.job.trim() || null,
+      ticket_number: input.ticketNumber.trim() || null,
       edited: true,
     })
     .eq("id", id);
@@ -108,6 +112,8 @@ export async function addPunch(driverId: string, input: PunchInput): Promise<Res
     clock_out: times.clockOut ? times.clockOut.toISOString() : null,
     truck_number: input.truck.trim() || null,
     company: input.company.trim() || null,
+    job: input.job.trim() || null,
+    ticket_number: input.ticketNumber.trim() || null,
     edited: true,
   });
   if (error) {
