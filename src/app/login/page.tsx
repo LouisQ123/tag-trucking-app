@@ -1,3 +1,4 @@
+import Link from "next/link";
 import LoginForm from "./LoginForm";
 import Logo from "@/components/Logo";
 
@@ -23,6 +24,12 @@ export default async function LoginPage({
           </div>
         </div>
         <LoginForm next={next ?? "/"} />
+        <Link
+          href="/clock"
+          className="mt-4 block rounded-md border border-border bg-surface text-ink font-bold text-sm py-2.5 text-center hover:bg-surface-2"
+        >
+          Clock In / Out
+        </Link>
       </div>
     </main>
   );

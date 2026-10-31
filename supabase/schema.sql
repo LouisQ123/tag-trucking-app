@@ -651,6 +651,45 @@ drop policy if exists pay_stub_adj_delete on public.pay_stub_adjustments;
 create policy pay_stub_adj_delete on public.pay_stub_adjustments for delete using (public.is_admin());
 
 -- ============================================================
+-- 14e. TIME CLOCK — roster members clock in/out from a public page with a
+--      personal PIN (no account). The PIN is stored only as a salted hash.
+--      The public page talks to these tables through server code using the
+--      service role, so RLS stays admin-only.
+-- ============================================================
+alter table public.drivers add column if not exists pin_hash text;
+alter table public.drivers add column if not exists pin_failed_count integer not null default 0;
+alter table public.drivers add column if not exists pin_locked_until timestamptz;
+
+create table if not exists public.time_punches (
+  id uuid primary key default gen_random_uuid(),
+  driver_id uuid references public.drivers (id) on delete set null,
+  driver_name text not null,
+  work_date date not null,
+  clock_in timestamptz not null,
+  clock_out timestamptz,
+  truck_number text,
+  company text,
+  note text,
+  edited boolean not null default false,
+  created_at timestamptz not null default now(),
+  constraint time_punches_order check (clock_out is null or clock_out >= clock_in)
+);
+create unique index if not exists time_punches_one_open_idx
+  on public.time_punches (driver_id) where clock_out is null and driver_id is not null;
+create index if not exists time_punches_work_date_idx on public.time_punches (work_date);
+
+alter table public.time_punches enable row level security;
+
+drop policy if exists time_punches_select on public.time_punches;
+create policy time_punches_select on public.time_punches for select using (public.is_admin());
+drop policy if exists time_punches_insert on public.time_punches;
+create policy time_punches_insert on public.time_punches for insert with check (public.is_admin());
+drop policy if exists time_punches_update on public.time_punches;
+create policy time_punches_update on public.time_punches for update using (public.is_admin());
+drop policy if exists time_punches_delete on public.time_punches;
+create policy time_punches_delete on public.time_punches for delete using (public.is_admin());
+
+-- ============================================================
 -- 15. BOOTSTRAP THE FIRST ADMIN
 -- ============================================================
 -- 1. Create your own user once, e.g. via Supabase Dashboard -> Authentication

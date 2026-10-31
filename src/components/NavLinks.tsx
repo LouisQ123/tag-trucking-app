@@ -11,6 +11,7 @@ export const NAV_LINKS = [
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/paystubs", label: "Pay Stubs" },
   { href: "/admin/roster", label: "Roster" },
+  { href: "/admin/timeclock", label: "Time Clock" },
   { href: "/admin/team", label: "Team" },
   { href: "/admin/tax-guide", label: "Tax Guide" },
   { href: "/account", label: "Account" },

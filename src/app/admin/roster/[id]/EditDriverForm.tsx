@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateDriver, deleteDriver } from "@/lib/actions/roster";
+import { setDriverPin, clearDriverPin } from "@/lib/actions/timeclock";
 import type { ActionState } from "@/lib/actions/auth";
 import type { Driver } from "@/lib/types/database";
 import DateInput from "@/components/DateInput";
@@ -10,10 +11,42 @@ import PhoneInput from "@/components/PhoneInput";
 
 const initialState: ActionState = {};
 
-export default function EditDriverForm({ driver }: { driver: Driver }) {
+export default function EditDriverForm({ driver, hasPin }: { driver: Driver; hasPin: boolean }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(updateDriver, initialState);
   const [removing, setRemoving] = useState(false);
+  const [pinSet, setPinSet] = useState(hasPin);
+  const [pinText, setPinText] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinMessage, setPinMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function savePin() {
+    setPinBusy(true);
+    setPinMessage(null);
+    const result = await setDriverPin(driver.id, pinText);
+    setPinBusy(false);
+    if ("error" in result) {
+      setPinMessage({ ok: false, text: result.error });
+      return;
+    }
+    setPinSet(true);
+    setPinText("");
+    setPinMessage({ ok: true, text: "PIN saved." });
+  }
+
+  async function removePin() {
+    if (!confirm(`Remove ${driver.full_name}'s time clock PIN? They won't be able to clock in until you set a new one.`)) return;
+    setPinBusy(true);
+    setPinMessage(null);
+    const result = await clearDriverPin(driver.id);
+    setPinBusy(false);
+    if ("error" in result) {
+      setPinMessage({ ok: false, text: result.error });
+      return;
+    }
+    setPinSet(false);
+    setPinMessage({ ok: true, text: "PIN removed." });
+  }
 
   const [lastHandledState, setLastHandledState] = useState(state);
   const [saved, setSaved] = useState(false);
@@ -56,6 +89,47 @@ export default function EditDriverForm({ driver }: { driver: Driver }) {
             />
           </Field>
         </Grid>
+      </Section>
+
+      <Section title="Time Clock">
+        <p className="text-[12.5px] text-ink-2 mb-3">
+          {pinSet ? "A PIN is set." : "No PIN yet."} They clock in and out from the login page with their name and this
+          4-digit PIN — no account needed.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={pinText}
+            onChange={(e) => setPinText(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            placeholder="4 digits"
+            aria-label="New PIN"
+            autoComplete="off"
+            className="input w-28"
+          />
+          <button
+            type="button"
+            onClick={savePin}
+            disabled={pinBusy || pinText.length !== 4}
+            className="rounded-lg bg-accent text-accent-ink font-bold text-sm px-4 py-2 disabled:opacity-60"
+          >
+            {pinSet ? "Change PIN" : "Set PIN"}
+          </button>
+          {pinSet && (
+            <button
+              type="button"
+              onClick={removePin}
+              disabled={pinBusy}
+              className="text-xs font-bold text-critical/70 hover:text-critical disabled:opacity-50"
+            >
+              Remove PIN
+            </button>
+          )}
+        </div>
+        {pinMessage && (
+          <p className={`text-sm font-semibold mt-2 ${pinMessage.ok ? "text-good" : "text-critical"}`}>
+            {pinMessage.text}
+          </p>
+        )}
       </Section>
 
       <Section title="Compliance">

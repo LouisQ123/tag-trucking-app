@@ -1,4 +1,4 @@
-import { addDaysISO } from "@/lib/workWeek";
+import { addDaysISO, workWeekStartOf } from "@/lib/workWeek";
 
 export interface PayStubSheet {
   driver_name: string;
@@ -30,11 +30,22 @@ export interface PayAdjustment {
   note: string | null;
 }
 
+// A finished clock-in/clock-out shift from the time clock.
+export interface PayStubPunch {
+  driver_name: string;
+  work_date: string;
+  hours: number;
+  truck: string | null;
+  company: string | null;
+}
+
 export interface PayStubLine {
   // Set for a manual adjustment line (and null for a production-sheet shift).
   adjustmentId: string | null;
   // A flat-dollar adjustment: no hours or rate, just the amount.
   dollarOnly: boolean;
+  // Set for a time clock shift (the company they worked for that day).
+  company: string | null;
   note: string | null;
   date: string;
   truck: string | null;
@@ -58,7 +69,7 @@ export interface PayStub {
   // exactly what's unpaid-for rather than a silently wrong total.
   missingRateCount: number;
   ytdHours: number;
-  // Calculated from the production sheets plus manual hour adjustments.
+  // Calculated from the production sheets, time clock shifts, and adjustments.
   ytdSheetsGross: number;
   // Paid earlier in the year, before the app tracked it (entered by hand).
   priorPayments: number;
@@ -135,40 +146,71 @@ export function buildPayStubs(
   weekStart: string,
   checks: Record<string, string> = {},
   priors: Record<string, number> = {},
-  adjustments: PayAdjustment[] = []
+  adjustments: PayAdjustment[] = [],
+  punches: PayStubPunch[] = []
 ): PayStub[] {
   const weekEnd = addDaysISO(weekStart, 6);
 
-  const byDriver = new Map<string, { name: string; sheets: PayStubSheet[]; adjustments: PayAdjustment[] }>();
+  interface DriverEntry {
+    name: string;
+    sheets: PayStubSheet[];
+    adjustments: PayAdjustment[];
+    punches: PayStubPunch[];
+  }
+  const byDriver = new Map<string, DriverEntry>();
+  const entryFor = (rawKey: string, rawName: string): DriverEntry => {
+    const key = resolveKey(rawKey, byDriver.keys());
+    let entry = byDriver.get(key);
+    if (!entry) {
+      entry = { name: rawName.trim(), sheets: [], adjustments: [], punches: [] };
+      byDriver.set(key, entry);
+    }
+    return entry;
+  };
   for (const s of sheets) {
     if (s.date > weekEnd) continue;
-    const key = normalizeName(s.driver_name);
-    const entry = byDriver.get(key) ?? { name: s.driver_name.trim(), sheets: [], adjustments: [] };
-    entry.sheets.push(s);
-    byDriver.set(key, entry);
+    entryFor(normalizeName(s.driver_name), s.driver_name).sheets.push(s);
   }
   for (const a of adjustments) {
     if (a.week_start > weekStart) continue;
-    const key = resolveKey(a.driver_key, byDriver.keys());
-    const entry = byDriver.get(key) ?? { name: a.driver_name.trim(), sheets: [], adjustments: [] };
-    entry.adjustments.push(a);
-    byDriver.set(key, entry);
+    entryFor(a.driver_key, a.driver_name).adjustments.push(a);
+  }
+  for (const p of punches) {
+    if (p.work_date > weekEnd) continue;
+    entryFor(normalizeName(p.driver_name), p.driver_name).punches.push(p);
   }
 
   const year = weekEnd.slice(0, 4);
   const stubs: PayStub[] = [];
-  for (const [key, { name, sheets: driverSheets, adjustments: driverAdjs }] of byDriver.entries()) {
+  for (const [key, { name, sheets: driverSheets, adjustments: driverAdjs, punches: driverPunches }] of byDriver.entries()) {
     const weekSheets = driverSheets.filter((s) => s.date >= weekStart && s.date <= weekEnd);
     const weekAdjs = driverAdjs.filter((a) => a.week_start === weekStart);
-    if (!weekSheets.length && !weekAdjs.length) continue;
+
+    // A day that already has a production sheet is paid from the sheet, so
+    // the clock punch for that same day isn't counted a second time.
+    const sheetDates = new Set(driverSheets.map((s) => s.date));
+    const usablePunches = driverPunches.filter((p) => !sheetDates.has(p.work_date));
+    const weekPunches = usablePunches.filter((p) => p.work_date >= weekStart && p.work_date <= weekEnd);
+    if (!weekSheets.length && !weekAdjs.length && !weekPunches.length) continue;
 
     const contact = findContact(name, roster);
+
+    // Clocked time is paid at the driver's rate that week (from their
+    // sheets), else their default rate on the roster.
+    const punchRate = (workDate: string): number | null => {
+      const wk = workWeekStartOf(workDate) ?? workDate;
+      const fromSheet = driverSheets
+        .filter((x) => x.date >= wk && x.date <= addDaysISO(wk, 6) && x.hourly_pay !== null)
+        .sort((a, b) => b.date.localeCompare(a.date))[0]?.hourly_pay;
+      return fromSheet ?? contact?.hourly_pay ?? null;
+    };
 
     const sheetLines: PayStubLine[] = weekSheets
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((s) => ({
         adjustmentId: null,
         dollarOnly: false,
+        company: null,
         note: null,
         date: s.date,
         truck: s.truck_number,
@@ -181,6 +223,7 @@ export function buildPayStubs(
         return {
           adjustmentId: a.id,
           dollarOnly: true,
+          company: null,
           note: a.note,
           date: weekEnd,
           truck: null,
@@ -193,6 +236,7 @@ export function buildPayStubs(
       return {
         adjustmentId: a.id,
         dollarOnly: false,
+        company: null,
         note: a.note,
         date: weekEnd,
         truck: null,
@@ -201,7 +245,23 @@ export function buildPayStubs(
         amount: rate !== null ? round2(a.hours * rate) : null,
       };
     });
-    const lines = [...sheetLines, ...adjLines];
+    const clockLines: PayStubLine[] = weekPunches
+      .sort((a, b) => a.work_date.localeCompare(b.work_date))
+      .map((p) => {
+        const rate = punchRate(p.work_date);
+        return {
+          adjustmentId: null,
+          dollarOnly: false,
+          company: p.company,
+          note: null,
+          date: p.work_date,
+          truck: p.truck,
+          hours: p.hours,
+          rate,
+          amount: rate !== null ? round2(p.hours * rate) : null,
+        };
+      });
+    const lines = [...sheetLines, ...clockLines, ...adjLines];
 
     // Year-to-date: calendar year of the pay period's end (when it's paid).
     const ytdSheets = driverSheets.filter((s) => s.date.slice(0, 4) === year);
@@ -213,8 +273,16 @@ export function buildPayStubs(
       return rate !== null ? round2((a.hours ?? 0) * rate) : 0;
     });
 
+    const ytdPunches = usablePunches.filter((p) => p.work_date.slice(0, 4) === year);
+    const ytdPunchAmount = ytdPunches.reduce((acc, p) => {
+      const rate = punchRate(p.work_date);
+      return acc + (rate !== null ? round2(p.hours * rate) : 0);
+    }, 0);
+
     const ytdSheetsGross = round2(
-      ytdSheets.reduce((acc, s) => acc + (sheetAmount(s) ?? 0), 0) + ytdAdjAmounts.reduce((acc, n) => acc + n, 0)
+      ytdSheets.reduce((acc, s) => acc + (sheetAmount(s) ?? 0), 0) +
+        ytdAdjAmounts.reduce((acc, n) => acc + n, 0) +
+        ytdPunchAmount
     );
     const priorPayments = priors[key] ?? 0;
 
@@ -230,7 +298,9 @@ export function buildPayStubs(
       grossPay: round2(lines.reduce((acc, l) => acc + (l.amount ?? 0), 0)),
       missingRateCount: lines.filter((l) => l.hours !== 0 && l.amount === null).length,
       ytdHours: round2(
-        ytdSheets.reduce((acc, s) => acc + (s.hours ?? 0), 0) + ytdAdjs.reduce((acc, a) => acc + (a.hours ?? 0), 0)
+        ytdSheets.reduce((acc, s) => acc + (s.hours ?? 0), 0) +
+          ytdAdjs.reduce((acc, a) => acc + (a.hours ?? 0), 0) +
+          ytdPunches.reduce((acc, p) => acc + p.hours, 0)
       ),
       ytdSheetsGross,
       priorPayments,

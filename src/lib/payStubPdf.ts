@@ -133,7 +133,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
     autoTable(pdf, {
       startY: y,
       margin: { left: margin, right: margin },
-      head: [["Date", "Truck #", "Hours", "Rate", "Amount"]],
+      head: [["Date", "Truck # / Company", "Hours", "Rate", "Amount"]],
       body: stub.lines.map((l) => {
         const tail = [
           l.dollarOnly ? "—" : l.hours.toLocaleString("en-US"),
@@ -147,7 +147,7 @@ export async function downloadPayStubsPdf(stubs: PayStub[]): Promise<void> {
             ...tail,
           ];
         }
-        return [fmtDate(l.date), l.truck ?? "—", ...tail];
+        return [fmtDate(l.date), `${l.truck ?? "—"}${l.company ? ` · ${l.company}` : ""}`, ...tail];
       }),
       foot: [["Week total", "", stub.totalHours.toLocaleString("en-US"), "", currency(stub.grossPay)]],
       showFoot: "lastPage",

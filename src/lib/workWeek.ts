@@ -96,6 +96,37 @@ export function currentWorkWeekRange(): { startISO: string; endISO: string } {
   return { startISO: ordinalToISO(weekStartOrdinal), endISO: ordinalToISO(weekEndOrdinal) };
 }
 
+// The Eastern-time calendar date ("YYYY-MM-DD") of a real instant.
+export function easternDateOf(date: Date): string {
+  const { y, m, d } = toEasternYmd(date);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// The real instant for a wall-clock date + "HH:MM" in Eastern time (handles
+// daylight saving: the guess is nudged by however far Eastern's wall clock
+// landed from the requested one).
+export function easternInstant(dateISO: string, time: string): Date {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  const wanted = Date.UTC(y, m - 1, d, hh, mm);
+  let guess = wanted;
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: TIME_ZONE,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(new Date(guess));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+    const shown = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+    guess += wanted - shown;
+  }
+  return new Date(guess);
+}
+
 // The Monday of the Mon–Sun work week a plain "YYYY-MM-DD" date falls in.
 export function workWeekStartOf(dateISO: string): string | null {
   const ymd = parseIsoDate(dateISO);

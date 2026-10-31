@@ -5,7 +5,10 @@ import { NextResponse, type NextRequest } from "next/server";
 // that checks its own CRON_SECRET bearer token instead of a user session,
 // so it must be exempt from this session-based redirect (a real request
 // with no cookies would otherwise always bounce to /login).
-const PUBLIC_PATHS = ["/login", "/auth", "/api/cron"];
+//
+// /clock is the PIN-based time clock for roster members, who have no account
+// by design — it only exposes clock in/out, never the dashboard.
+const PUBLIC_PATHS = ["/login", "/auth", "/api/cron", "/clock"];
 
 export default async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
