@@ -123,3 +123,13 @@ export async function addPunch(driverId: string, input: PunchInput): Promise<Res
   revalidatePath("/admin/paystubs");
   return { ok: true };
 }
+
+// Lets someone clock in/out from anywhere instead of only at the yard.
+export async function setClockAnywhere(driverId: string, allowed: boolean): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("drivers").update({ clock_anywhere: allowed }).eq("id", driverId);
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/roster/${driverId}`);
+  return { ok: true };
+}

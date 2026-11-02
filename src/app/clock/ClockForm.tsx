@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { clockIn, clockOut, clockVerify, type ClockState } from "@/lib/actions/clock";
+import { YARD, type Position } from "@/lib/yard";
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
@@ -16,6 +17,27 @@ function fmtDay(iso: string): string {
     weekday: "short",
     month: "short",
     day: "numeric",
+  });
+}
+
+// Asks the phone where it is right now (not a cached reading).
+function getPosition(): Promise<Position | { error: string }> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      resolve({ error: "This device can't share its location, so it can't be used to clock in." });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+      (err) =>
+        resolve({
+          error:
+            err.code === err.PERMISSION_DENIED
+              ? `Location is blocked. Allow location for this site in your browser settings, then try again. You can only clock in and out at the yard (${YARD.address}).`
+              : "We couldn't find your location. Try again outside with GPS on.",
+        }),
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    );
   });
 }
 
@@ -61,7 +83,13 @@ export default function ClockForm({ names }: { names: { id: string; name: string
   async function doClockIn() {
     setBusy(true);
     setError(null);
-    const result = await clockIn(driverId, pin, truck, company, job, ticket);
+    const pos = await getPosition();
+    if ("error" in pos) {
+      setBusy(false);
+      setError(pos.error);
+      return;
+    }
+    const result = await clockIn(driverId, pin, truck, company, job, ticket, pos);
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
@@ -73,7 +101,13 @@ export default function ClockForm({ names }: { names: { id: string; name: string
   async function doClockOut() {
     setBusy(true);
     setError(null);
-    const result = await clockOut(driverId, pin, ticket);
+    const pos = await getPosition();
+    if ("error" in pos) {
+      setBusy(false);
+      setError(pos.error);
+      return;
+    }
+    const result = await clockOut(driverId, pin, ticket, pos);
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
@@ -175,7 +209,7 @@ export default function ClockForm({ names }: { names: { id: string; name: string
             disabled={busy || !ticket.trim()}
             className="rounded-md bg-critical text-white font-bold text-sm py-3 disabled:opacity-60"
           >
-            {busy ? "Clocking out…" : "Clock Out"}
+            {busy ? "Checking location…" : "Clock Out"}
           </button>
           <button type="button" onClick={() => reset(null)} className="text-xs font-bold text-ink-2 hover:text-ink">
             Cancel
@@ -241,13 +275,16 @@ export default function ClockForm({ names }: { names: { id: string; name: string
             disabled={busy || !truck || !company.trim() || !job.trim() || !ticket.trim()}
             className="rounded-md bg-good text-white font-bold text-sm py-3 disabled:opacity-60"
           >
-            {busy ? "Clocking in…" : "Clock In"}
+            {busy ? "Checking location…" : "Clock In"}
           </button>
           <button type="button" onClick={() => reset(null)} className="text-xs font-bold text-ink-2 hover:text-ink">
             Cancel
           </button>
         </>
       )}
+      <p className="text-[11px] text-muted text-center leading-relaxed">
+        You can only clock in and out at the yard, {YARD.address}. Your phone will ask to share its location.
+      </p>
     </div>
   );
 }

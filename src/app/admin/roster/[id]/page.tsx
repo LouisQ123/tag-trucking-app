@@ -13,11 +13,13 @@ export default async function EditRosterDriverPage({ params }: { params: Promise
       .select("id, full_name, phone, hourly_pay, cdl_number, license_expiration, medical_card_expiration, created_at")
       .eq("id", id)
       .single(),
-    supabase.from("drivers").select("pin_hash").eq("id", id).maybeSingle(),
+    supabase.from("drivers").select("pin_hash, clock_anywhere").eq("id", id).maybeSingle(),
   ]);
 
   if (!driver) notFound();
-  const hasPin = !!(pinRow as { pin_hash: string | null } | null)?.pin_hash;
+  const clockRow = pinRow as { pin_hash: string | null; clock_anywhere: boolean } | null;
+  const hasPin = !!clockRow?.pin_hash;
+  const clockAnywhere = !!clockRow?.clock_anywhere;
 
   return (
     <main className="max-w-lg mx-auto px-5 py-8">
@@ -25,7 +27,7 @@ export default async function EditRosterDriverPage({ params }: { params: Promise
         <h1 className="text-xl font-extrabold tracking-tight">Edit Driver</h1>
         <p className="text-sm text-ink-2 mt-0.5">Changes take effect immediately.</p>
       </div>
-      <EditDriverForm driver={driver as Driver} hasPin={hasPin} />
+      <EditDriverForm driver={driver as Driver} hasPin={hasPin} clockAnywhere={clockAnywhere} />
     </main>
   );
 }

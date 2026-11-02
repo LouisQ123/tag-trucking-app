@@ -659,6 +659,9 @@ create policy pay_stub_adj_delete on public.pay_stub_adjustments for delete usin
 alter table public.drivers add column if not exists pin_hash text;
 alter table public.drivers add column if not exists pin_failed_count integer not null default 0;
 alter table public.drivers add column if not exists pin_locked_until timestamptz;
+-- Clocking in/out is limited to the yard (checked from the phone's location);
+-- flip this on for someone who needs to clock from elsewhere, e.g. for testing.
+alter table public.drivers add column if not exists clock_anywhere boolean not null default false;
 
 create table if not exists public.time_punches (
   id uuid primary key default gen_random_uuid(),

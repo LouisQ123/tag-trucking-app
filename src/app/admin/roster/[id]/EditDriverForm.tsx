@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateDriver, deleteDriver } from "@/lib/actions/roster";
-import { setDriverPin, clearDriverPin } from "@/lib/actions/timeclock";
+import { setDriverPin, clearDriverPin, setClockAnywhere } from "@/lib/actions/timeclock";
 import type { ActionState } from "@/lib/actions/auth";
 import type { Driver } from "@/lib/types/database";
 import DateInput from "@/components/DateInput";
@@ -11,11 +11,20 @@ import PhoneInput from "@/components/PhoneInput";
 
 const initialState: ActionState = {};
 
-export default function EditDriverForm({ driver, hasPin }: { driver: Driver; hasPin: boolean }) {
+export default function EditDriverForm({
+  driver,
+  hasPin,
+  clockAnywhere,
+}: {
+  driver: Driver;
+  hasPin: boolean;
+  clockAnywhere: boolean;
+}) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(updateDriver, initialState);
   const [removing, setRemoving] = useState(false);
   const [pinSet, setPinSet] = useState(hasPin);
+  const [anywhere, setAnywhere] = useState(clockAnywhere);
   const [pinText, setPinText] = useState("");
   const [pinBusy, setPinBusy] = useState(false);
   const [pinMessage, setPinMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -32,6 +41,16 @@ export default function EditDriverForm({ driver, hasPin }: { driver: Driver; has
     setPinSet(true);
     setPinText("");
     setPinMessage({ ok: true, text: "PIN saved." });
+  }
+
+  async function toggleAnywhere(next: boolean) {
+    setAnywhere(next);
+    setPinMessage(null);
+    const result = await setClockAnywhere(driver.id, next);
+    if ("error" in result) {
+      setAnywhere(!next);
+      setPinMessage({ ok: false, text: result.error });
+    }
   }
 
   async function removePin() {
@@ -125,6 +144,18 @@ export default function EditDriverForm({ driver, hasPin }: { driver: Driver; has
             </button>
           )}
         </div>
+        <label className="flex items-start gap-2 text-[13px] text-ink-2 cursor-pointer mt-3">
+          <input
+            type="checkbox"
+            checked={anywhere}
+            onChange={(e) => toggleAnywhere(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-bold text-ink">Can clock in from anywhere.</span> Otherwise they can only clock in
+            and out at the yard.
+          </span>
+        </label>
         {pinMessage && (
           <p className={`text-sm font-semibold mt-2 ${pinMessage.ok ? "text-good" : "text-critical"}`}>
             {pinMessage.text}

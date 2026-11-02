@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { TRUCK_NUMBERS } from "@/lib/loadOptions";
 import { easternDateOf } from "@/lib/workWeek";
 import { pinMatches } from "@/lib/pin";
+import { checkAtYard, type Position } from "@/lib/yard";
 
 // PUBLIC actions behind the /clock page — there is no login here, so every
 // action re-proves who's asking with the person's PIN, and talks to the
@@ -18,6 +19,7 @@ interface DriverRow {
   pin_hash: string | null;
   pin_failed_count: number;
   pin_locked_until: string | null;
+  clock_anywhere: boolean;
 }
 
 // Wrong name, no PIN set, and wrong PIN all read the same, so the page can't
@@ -33,7 +35,7 @@ async function authenticate(
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("drivers")
-    .select("id, full_name, pin_hash, pin_failed_count, pin_locked_until")
+    .select("id, full_name, pin_hash, pin_failed_count, pin_locked_until, clock_anywhere")
     .eq("id", driverId)
     .maybeSingle();
   const driver = data as DriverRow | null;
@@ -61,6 +63,16 @@ async function authenticate(
     await supabase.from("drivers").update({ pin_failed_count: 0, pin_locked_until: null }).eq("id", driver.id);
   }
   return { driver };
+}
+
+// Clocking is limited to the yard: the phone sends its location with the
+// request and the server checks it, so the page can't skip the rule. (Anyone
+// determined can fake a phone's GPS — this stops the casual out-of-yard
+// clock-in, not a deliberate spoof.) Someone flagged clock_anywhere is exempt.
+function locationGate(driver: DriverRow, loc: Position | null): { error: string } | null {
+  if (driver.clock_anywhere) return null;
+  const result = checkAtYard(loc);
+  return result.ok ? null : { error: result.reason };
 }
 
 // Only people who have a PIN can clock in, so only they're listed.
@@ -130,10 +142,13 @@ export async function clockIn(
   truck: string,
   company: string,
   job: string,
-  ticketNumber: string
+  ticketNumber: string,
+  loc: Position | null
 ): Promise<{ error: string } | { state: ClockState }> {
   const auth = await authenticate(driverId, pin);
   if ("error" in auth) return auth;
+  const blocked = locationGate(auth.driver, loc);
+  if (blocked) return blocked;
 
   const truckValue = truck.trim();
   const companyValue = company.trim();
@@ -171,10 +186,13 @@ export async function clockIn(
 export async function clockOut(
   driverId: string,
   pin: string,
-  ticketNumber: string = ""
+  ticketNumber: string,
+  loc: Position | null
 ): Promise<{ error: string } | { state: ClockState; hours: number }> {
   const auth = await authenticate(driverId, pin);
   if ("error" in auth) return auth;
+  const blocked = locationGate(auth.driver, loc);
+  if (blocked) return blocked;
 
   const supabase = createAdminClient();
   const { data: open } = await supabase
