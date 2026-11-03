@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/pin";
-import { easternDateOf, easternInstant } from "@/lib/workWeek";
+import { easternDateOf, easternInstant, todayEasternISO } from "@/lib/workWeek";
 import { clockAlertConfigured, sendClockInAlert } from "@/lib/clockAlert";
+import { sendDailySummaryFor } from "@/lib/dailySummaryRun";
 
 type Result = { error: string } | { ok: true };
 
@@ -150,4 +151,17 @@ export async function sendTestClockAlert(): Promise<{ error: string } | { ok: tr
     job: "3950 N Delaware Ave",
   });
   return result.ok ? { ok: true } : { error: result.error };
+}
+
+// Emails today's hours summary now, instead of waiting for tonight's.
+export async function emailTodaysSummary(): Promise<{ error: string } | { ok: true; message: string }> {
+  await requireAdmin();
+  if (!clockAlertConfigured()) {
+    return { error: "Email alerts aren't set up yet (needs RESEND_API_KEY and CLOCK_ALERT_TO)." };
+  }
+  const result = await sendDailySummaryFor(todayEasternISO());
+  if (result.sent) {
+    return { ok: true, message: `Sent: ${result.drivers} driver${result.drivers === 1 ? "" : "s"}, ${result.totalHours} hours.` };
+  }
+  return { error: result.error ?? result.reason ?? "Couldn't send the summary." };
 }

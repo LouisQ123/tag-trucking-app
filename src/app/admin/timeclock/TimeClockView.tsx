@@ -3,7 +3,14 @@
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addPunch, deletePunch, sendTestClockAlert, updatePunch, type PunchInput } from "@/lib/actions/timeclock";
+import {
+  addPunch,
+  deletePunch,
+  emailTodaysSummary,
+  sendTestClockAlert,
+  updatePunch,
+  type PunchInput,
+} from "@/lib/actions/timeclock";
 import DateInput from "@/components/DateInput";
 import TimeInput from "@/components/TimeInput";
 
@@ -78,6 +85,16 @@ export default function TimeClockView({
     ok: false,
   });
 
+  async function sendSummary() {
+    setTestState({ busy: true, msg: null, ok: false });
+    const result = await emailTodaysSummary();
+    setTestState(
+      "error" in result
+        ? { busy: false, msg: result.error, ok: false }
+        : { busy: false, msg: result.message, ok: true }
+    );
+  }
+
   async function sendTest() {
     setTestState({ busy: true, msg: null, ok: false });
     const result = await sendTestClockAlert();
@@ -150,7 +167,7 @@ export default function TimeClockView({
       </div>
 
       <div className="flex items-center gap-3 flex-wrap text-[12.5px] text-ink-2">
-        <span>The boss is emailed each time someone clocks in.</span>
+        <span>The boss is emailed each time someone clocks in, plus a daily hours summary each evening.</span>
         <button
           type="button"
           onClick={sendTest}
@@ -158,6 +175,14 @@ export default function TimeClockView({
           className="font-bold text-accent hover:underline disabled:opacity-60"
         >
           {testState.busy ? "Sending…" : "Send a test email"}
+        </button>
+        <button
+          type="button"
+          onClick={sendSummary}
+          disabled={testState.busy}
+          className="font-bold text-accent hover:underline disabled:opacity-60"
+        >
+          Email today&apos;s summary now
         </button>
         {testState.msg && (
           <span className={`font-semibold ${testState.ok ? "text-good" : "text-critical"}`}>{testState.msg}</span>

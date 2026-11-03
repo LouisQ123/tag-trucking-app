@@ -23,14 +23,48 @@ export function clockAlertConfigured(): boolean {
   return !!process.env.RESEND_API_KEY && !!process.env.CLOCK_ALERT_TO;
 }
 
-export async function sendClockInAlert(alert: ClockAlert): Promise<{ ok: true } | { ok: false; error: string }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = (process.env.CLOCK_ALERT_TO ?? "")
+function recipients(): string[] {
+  return (process.env.CLOCK_ALERT_TO ?? "")
     .split(",")
     .map((a) => a.trim())
     .filter(Boolean);
+}
+
+// Sends one email to the alert recipients. `html` is optional; the plain text
+// is always included.
+export async function sendAlertEmail(opts: {
+  subject: string;
+  text: string;
+  html?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = recipients();
   if (!apiKey || !to.length) return { ok: false, error: "Email alerts aren't configured." };
 
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: process.env.CLOCK_ALERT_FROM || "ATG Time Clock <onboarding@resend.dev>",
+        to,
+        subject: opts.subject,
+        text: opts.text,
+        ...(opts.html ? { html: opts.html } : {}),
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { ok: false, error: `Email service said ${res.status}: ${detail.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't reach the email service." };
+  }
+}
+
+export async function sendClockInAlert(alert: ClockAlert): Promise<{ ok: true } | { ok: false; error: string }> {
   const name = oneLine(alert.name);
   const company = oneLine(alert.company);
   const job = oneLine(alert.job);
@@ -43,30 +77,14 @@ export async function sendClockInAlert(alert: ClockAlert): Promise<{ ok: true } 
     minute: "2-digit",
   });
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: process.env.CLOCK_ALERT_FROM || "ATG Time Clock <onboarding@resend.dev>",
-        to,
-        subject: `${name} clocked in — ${company}${job ? ` / ${job}` : ""}`,
-        text: [
-          `${name} clocked in at ${when}.`,
-          "",
-          `Company: ${company}`,
-          `Job: ${job || "—"}`,
-          `Truck: ${oneLine(alert.truck) || "—"}`,
-        ].join("\n"),
-      }),
-      signal: AbortSignal.timeout(6000),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      return { ok: false, error: `Email service said ${res.status}: ${detail.slice(0, 200)}` };
-    }
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Couldn't reach the email service." };
-  }
+  return sendAlertEmail({
+    subject: `${name} clocked in — ${company}${job ? ` / ${job}` : ""}`,
+    text: [
+      `${name} clocked in at ${when}.`,
+      "",
+      `Company: ${company}`,
+      `Job: ${job || "—"}`,
+      `Truck: ${oneLine(alert.truck) || "—"}`,
+    ].join("\n"),
+  });
 }
