@@ -116,8 +116,9 @@ export default function ClockForm({ names }: { names: { id: string; name: string
     reset(`Clocked out. You worked ${result.hours} hours.`);
   }
 
-  const inputClass =
-    "rounded-md border border-border bg-page px-3 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent w-full";
+  // The shared app input style — it also restyles <select> so the name and
+  // truck dropdowns match the text boxes.
+  const inputClass = "input";
   const labelClass = "text-xs font-bold uppercase tracking-wide text-ink-2";
 
   return (
