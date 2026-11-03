@@ -5,6 +5,7 @@ import { TRUCK_NUMBERS } from "@/lib/loadOptions";
 import { easternDateOf } from "@/lib/workWeek";
 import { pinMatches } from "@/lib/pin";
 import { checkAtYard, type Position } from "@/lib/yard";
+import { sendClockInAlert } from "@/lib/clockAlert";
 
 // PUBLIC actions behind the /clock page — there is no login here, so every
 // action re-proves who's asking with the person's PIN, and talks to the
@@ -174,6 +175,18 @@ export async function clockIn(
     if (error.code === "23505") return { error: "You're already clocked in." };
     return { error: "Couldn't clock you in. Try again." };
   }
+
+  // Tell the boss. Awaited so the serverless function isn't cut off before the
+  // email goes out, but a failure is only logged — it never blocks the clock-in.
+  const alert = await sendClockInAlert({
+    name: auth.driver.full_name,
+    clockInISO: now.toISOString(),
+    truck: truckValue,
+    company: companyValue,
+    job: jobValue,
+  });
+  if (!alert.ok && process.env.RESEND_API_KEY) console.error("Clock-in alert failed:", alert.error);
+
   return { state: await loadState(auth.driver) };
 }
 

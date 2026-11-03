@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/pin";
 import { easternDateOf, easternInstant } from "@/lib/workWeek";
+import { clockAlertConfigured, sendClockInAlert } from "@/lib/clockAlert";
 
 type Result = { error: string } | { ok: true };
 
@@ -132,4 +133,21 @@ export async function setClockAnywhere(driverId: string, allowed: boolean): Prom
   if (error) return { error: error.message };
   revalidatePath(`/admin/roster/${driverId}`);
   return { ok: true };
+}
+
+// Sends a sample clock-in email so the setup can be checked without waiting for
+// a real clock-in.
+export async function sendTestClockAlert(): Promise<{ error: string } | { ok: true }> {
+  await requireAdmin();
+  if (!clockAlertConfigured()) {
+    return { error: "Email alerts aren't set up yet (needs RESEND_API_KEY and CLOCK_ALERT_TO)." };
+  }
+  const result = await sendClockInAlert({
+    name: "Test Driver",
+    clockInISO: new Date().toISOString(),
+    truck: "V5",
+    company: "P3 Contractors/Carney",
+    job: "3950 N Delaware Ave",
+  });
+  return result.ok ? { ok: true } : { error: result.error };
 }

@@ -3,7 +3,7 @@
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addPunch, deletePunch, updatePunch, type PunchInput } from "@/lib/actions/timeclock";
+import { addPunch, deletePunch, sendTestClockAlert, updatePunch, type PunchInput } from "@/lib/actions/timeclock";
 import DateInput from "@/components/DateInput";
 import TimeInput from "@/components/TimeInput";
 
@@ -72,6 +72,21 @@ export default function TimeClockView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testState, setTestState] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({
+    busy: false,
+    msg: null,
+    ok: false,
+  });
+
+  async function sendTest() {
+    setTestState({ busy: true, msg: null, ok: false });
+    const result = await sendTestClockAlert();
+    setTestState(
+      "error" in result
+        ? { busy: false, msg: result.error, ok: false }
+        : { busy: false, msg: "Test email sent — check the inbox.", ok: true }
+    );
+  }
 
   const groups = new Map<string, { name: string; punches: Punch[] }>();
   for (const p of punches) {
@@ -132,6 +147,21 @@ export default function TimeClockView({
         >
           {showAdd ? "Close" : "+ Add a missed punch"}
         </button>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap text-[12.5px] text-ink-2">
+        <span>The boss is emailed each time someone clocks in.</span>
+        <button
+          type="button"
+          onClick={sendTest}
+          disabled={testState.busy}
+          className="font-bold text-accent hover:underline disabled:opacity-60"
+        >
+          {testState.busy ? "Sending…" : "Send a test email"}
+        </button>
+        {testState.msg && (
+          <span className={`font-semibold ${testState.ok ? "text-good" : "text-critical"}`}>{testState.msg}</span>
+        )}
       </div>
 
       {error && (
