@@ -89,7 +89,7 @@ export default function ClockForm({ names }: { names: { id: string; name: string
       setError(pos.error);
       return;
     }
-    const result = await clockIn(driverId, pin, truck, company, job, ticket, pos);
+    const result = await clockIn(driverId, pin, truck, company, job, pos);
     setBusy(false);
     if ("error" in result) {
       setError(result.error);
@@ -257,22 +257,10 @@ export default function ClockForm({ names }: { names: { id: string; name: string
               maxLength={120}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={labelClass} htmlFor="clock-ticket">
-              Ticket number(s)
-            </label>
-            <input
-              id="clock-ticket"
-              value={ticket}
-              onChange={(e) => setTicket(e.target.value)}
-              className={inputClass}
-              maxLength={60}
-            />
-          </div>
           <button
             type="button"
             onClick={doClockIn}
-            disabled={busy || !truck || !company.trim() || !job.trim() || !ticket.trim()}
+            disabled={busy || !truck || !company.trim() || !job.trim()}
             className="rounded-md bg-good text-white font-bold text-sm py-3 disabled:opacity-60"
           >
             {busy ? "Checking location…" : "Clock In"}

@@ -142,7 +142,6 @@ export async function clockIn(
   truck: string,
   company: string,
   job: string,
-  ticketNumber: string,
   loc: Position | null
 ): Promise<{ error: string } | { state: ClockState }> {
   const auth = await authenticate(driverId, pin);
@@ -153,11 +152,9 @@ export async function clockIn(
   const truckValue = truck.trim();
   const companyValue = company.trim();
   const jobValue = job.trim();
-  const ticketValue = ticketNumber.trim();
   if (!truckValue || !companyValue) return { error: "Pick your truck and type the company you're working for." };
   if (!jobValue) return { error: "Enter the job." };
-  if (!ticketValue) return { error: "Enter your ticket number." };
-  if (truckValue.length > 40 || companyValue.length > 80 || jobValue.length > 120 || ticketValue.length > 60) {
+  if (truckValue.length > 40 || companyValue.length > 80 || jobValue.length > 120) {
     return { error: "That's too long." };
   }
 
@@ -170,8 +167,7 @@ export async function clockIn(
     clock_in: now.toISOString(),
     truck_number: truckValue,
     company: companyValue,
-    job: jobValue || null,
-    ticket_number: ticketValue || null,
+    job: jobValue,
   });
   if (error) {
     // The one-open-punch-per-person index fires if they're already in.
@@ -181,8 +177,7 @@ export async function clockIn(
   return { state: await loadState(auth.driver) };
 }
 
-// The ticket number is required. One typed here replaces the clock-in one;
-// left blank, the one entered at clock-in is kept.
+// The ticket number is entered here, at clock-out, and is required.
 export async function clockOut(
   driverId: string,
   pin: string,
